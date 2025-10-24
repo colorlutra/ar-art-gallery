@@ -110,17 +110,49 @@
             border-radius: 8px;
             background-color: white;
             box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3);
+            cursor: crosshair;
         }
 
-        /* コントロールボタンのスタイル */
+        /* コントロール全体 */
         .controls {
             display: flex;
             gap: 10px;
             margin-top: 10px;
             width: 100%;
             justify-content: center;
+            align-items: center;
+        }
+
+        /* 描画オプション（色とサイズ）のコンテナ */
+        .drawing-options {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+            margin-right: 15px;
+            padding-right: 15px;
+            border-right: 1px solid #444;
+        }
+
+        /* 色ピッカーのスタイル */
+        #color-picker {
+            width: 30px;
+            height: 30px;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            outline: none;
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
+            /* ブラウザのデフォルトの枠線を非表示にするため */
+            background-color: transparent; 
+        }
+
+        /* サイズスライダーのスタイル */
+        #brush-size-slider {
+            width: 80px;
         }
         
+        /* コントロールボタンのスタイル */
         .control-button {
             padding: 10px 15px;
             border: none;
@@ -130,6 +162,7 @@
             cursor: pointer;
             transition: background-color 0.2s, transform 0.1s;
             color: white;
+            white-space: nowrap;
         }
         
         .control-button:active {
@@ -218,6 +251,16 @@
     <div id="drawing-ui">
         <canvas id="draw-canvas" width="300" height="200"></canvas>
         <div class="controls">
+            <!-- 描画オプション（色とサイズ）を追加 -->
+            <div class="drawing-options">
+                <label for="color-picker" style="color: white; font-weight: bold; font-size: 0.9rem;">色:</label>
+                <input type="color" id="color-picker" value="#000000">
+                
+                <label for="brush-size-slider" style="color: white; font-weight: bold; font-size: 0.9rem;">太さ:</label>
+                <input type="range" id="brush-size-slider" min="1" max="30" value="5">
+                <span id="brush-size-value" style="color: #ccc; font-size: 0.9rem;">5</span>
+            </div>
+            
             <button id="save-button" class="control-button">🎨 AR空間に反映＆保存</button>
             <button id="clear-button" class="control-button">🗑️ クリア</button>
         </div>
@@ -231,6 +274,10 @@
         const ctx = drawCanvas.getContext('2d');
         const saveButton = document.getElementById('save-button');
         const clearButton = document.getElementById('clear-button');
+        // 追加したコントロール
+        const colorPicker = document.getElementById('color-picker');
+        const brushSizeSlider = document.getElementById('brush-size-slider');
+        const brushSizeValue = document.getElementById('brush-size-value');
         
         // ARテクスチャ用の要素
         const arDrawingImg = document.getElementById('drawing-img');
@@ -240,8 +287,8 @@
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
-        let brushColor = '#000000';
-        let brushSize = 5;
+        let brushColor = colorPicker.value; // 初期値はピッカーから取得
+        let brushSize = parseInt(brushSizeSlider.value, 10); // 初期値はスライダーから取得
 
         // 初期化処理
         function setupDrawing() {
@@ -252,6 +299,7 @@
             ctx.lineCap = 'round';
             ctx.lineWidth = brushSize;
             ctx.strokeStyle = brushColor;
+            brushSizeValue.textContent = brushSize; // スライダーの初期値を表示
 
             // マウス/タッチイベントリスナーを設定
             drawCanvas.addEventListener('mousedown', (e) => startDrawing(e));
@@ -271,6 +319,18 @@
 
             clearButton.addEventListener('click', clearCanvas);
             saveButton.addEventListener('click', saveDrawing);
+            
+            // 色とサイズの変更イベントリスナー
+            colorPicker.addEventListener('input', (e) => {
+                brushColor = e.target.value;
+                ctx.strokeStyle = brushColor;
+            });
+
+            brushSizeSlider.addEventListener('input', (e) => {
+                brushSize = parseInt(e.target.value, 10);
+                ctx.lineWidth = brushSize;
+                brushSizeValue.textContent = brushSize; // 値をリアルタイム表示
+            });
         }
 
         // 描画開始
@@ -278,13 +338,17 @@
             isDrawing = true;
             [lastX, lastY] = [e.offsetX || (e.clientX - drawCanvas.getBoundingClientRect().left), 
                               e.offsetY || (e.clientY - drawCanvas.getBoundingClientRect().top)];
+            ctx.beginPath(); // 新しいパスを開始
+            ctx.moveTo(lastX, lastY);
+            // クリック/タップ直後の点を描画
+            ctx.lineTo(lastX + 0.001, lastY); // わずかに動かして点を描画
+            ctx.stroke();
         }
 
         // 描画中
         function draw(e) {
             if (!isDrawing) return;
-            ctx.beginPath();
-            ctx.moveTo(lastX, lastY);
+            // 描画はstartDrawingでbeginPathされているので、ここではラインを引くだけ
             ctx.lineTo(e.offsetX || (e.clientX - drawCanvas.getBoundingClientRect().left), 
                        e.offsetY || (e.clientY - drawCanvas.getBoundingClientRect().top));
             ctx.stroke();
@@ -294,7 +358,9 @@
 
         // 描画終了
         function stopDrawing() {
+            if (!isDrawing) return;
             isDrawing = false;
+            ctx.closePath();
         }
 
         // キャンバスを白でクリア
@@ -327,6 +393,12 @@
         async function saveDrawing() {
             if (!window.firebase || !window.firebase.db || !window.firebase.userId) {
                 console.error("Firebase is not initialized or user ID is missing.");
+                // ユーザー向けのカスタムUIを表示
+                const statusMessage = document.createElement('div');
+                statusMessage.textContent = 'エラー: サーバーとの接続が確立していません。少し待ってから再度お試しください。';
+                statusMessage.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #f44336; color: white; padding: 10px; border-radius: 5px; z-index: 1001;';
+                document.body.appendChild(statusMessage);
+                setTimeout(() => statusMessage.remove(), 4000);
                 return;
             }
 
@@ -353,8 +425,12 @@
                 console.log("Drawing successfully saved to Firestore.");
             } catch (e) {
                 console.error("Error saving document: ", e);
-                // カスタムUIでエラーを表示（alertは使用しない）
-                alert('保存中にエラーが発生しました。コンソールを確認してください。');
+                // カスタムUIでエラーを表示
+                const statusMessage = document.createElement('div');
+                statusMessage.textContent = '保存中にエラーが発生しました。コンソールを確認してください。';
+                statusMessage.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #f44336; color: white; padding: 10px; border-radius: 5px; z-index: 1001;';
+                document.body.appendChild(statusMessage);
+                setTimeout(() => statusMessage.remove(), 4000);
             }
         }
         
