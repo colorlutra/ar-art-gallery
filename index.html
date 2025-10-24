@@ -2,31 +2,152 @@
 <html lang="ja">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ARアートギャラリー（マーカーレス）</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ARアートギャラリー - 共同キャンバス</title>
     
     <!-- A-FrameとAR.jsのライブラリを読み込みます -->
-    <!-- WebAR体験を作るための必須ライブラリです -->
     <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
-    <!-- マーカーレスARでは、AR.jsの最新版ビルドを使用します -->
     <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+
+    <!-- Firebaseのインポート -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, doc, setDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        
+        // Firestoreログレベル設定 (デバッグ用)
+        // setLogLevel('debug');
+
+        // グローバル変数としてFirebaseインスタンスを保持
+        window.firebase = {};
+        let authReady = false;
+
+        // Firebase設定をロード
+        const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+        const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
+
+        // Firebase初期化と認証
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+        const auth = getAuth(app);
+        
+        window.firebase.db = db;
+        
+        // 認証処理
+        onAuthStateChanged(auth, async (user) => {
+            if (user) {
+                // 認証済み
+                window.firebase.userId = user.uid;
+            } else {
+                // 匿名サインインまたはカスタムトークン認証
+                try {
+                    if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
+                        await signInWithCustomToken(auth, __initial_auth_token);
+                    } else {
+                        await signInAnonymously(auth);
+                    }
+                } catch (error) {
+                    console.error("Firebase Auth failed:", error);
+                    // 認証失敗時もとりあえずランダムIDを使用
+                    window.firebase.userId = crypto.randomUUID();
+                }
+            }
+            authReady = true;
+            console.log("Firebase Auth Ready. User ID:", window.firebase.userId);
+            
+            // 認証完了後にデータ監視を開始
+            if (window.initApp) {
+                window.initApp();
+            }
+        });
+    </script>
+
 
     <style>
         /* AR体験を全画面表示するためのスタイル */
-        body { margin: 0; overflow: hidden; }
-        /* ロード中のメッセージを中央に表示するためのスタイル */
+        body { 
+            margin: 0; 
+            overflow: hidden; 
+            font-family: 'Inter', sans-serif;
+            background-color: #000;
+        }
+
+        /* ARロード中のメッセージ */
         #loading-message {
             position: fixed;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.7);
-            color: white;
-            padding: 15px;
-            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #E0E0E0;
+            padding: 20px 30px;
+            border-radius: 12px;
             z-index: 999;
             font-size: 1.1rem;
             text-align: center;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+        }
+
+        /* 描画UIコンテナ */
+        #drawing-ui {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            padding: 10px;
+            background: rgba(20, 20, 30, 0.9);
+            box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.5);
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        /* 描画キャンバスのスタイル */
+        #draw-canvas {
+            touch-action: none; /* タッチイベントの競合を防ぐ */
+            border: 2px solid #555;
+            border-radius: 8px;
+            background-color: white;
+            box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.3);
+        }
+
+        /* コントロールボタンのスタイル */
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 10px;
+            width: 100%;
+            justify-content: center;
+        }
+        
+        .control-button {
+            padding: 10px 15px;
+            border: none;
+            border-radius: 6px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            color: white;
+        }
+        
+        .control-button:active {
+            transform: scale(0.98);
+        }
+
+        #save-button {
+            background-color: #4CAF50; /* Green */
+        }
+        #save-button:hover {
+            background-color: #45A049;
+        }
+        
+        #clear-button {
+            background-color: #F44336; /* Red */
+        }
+        #clear-button:hover {
+            background-color: #E53935;
         }
     </style>
 </head>
@@ -34,80 +155,261 @@
 
     <!-- AR体験ロード中のメッセージ -->
     <div id="loading-message">
-        カメラを起動し、平らな場所をゆっくりと映してください。
+        ARシステムを初期化中...
         <br>
-        AR空間が認識されると、アート作品が出現します。
+        カメラを起動し、平らな場所をゆっくりと映してください。
     </div>
     
-    <!-- JavaScriptでメッセージを非表示にするためのリスナー -->
-    <script>
-        document.addEventListener('arjs-original-contents-loaded', function () {
-            const message = document.getElementById('loading-message');
-            if (message) {
-                message.style.display = 'none';
-            }
-            // ユーザーにタップを促すメッセージを一時的に表示することもできます
-            // 例: alert("画面をタップしてアートを配置してください！"); の代わりにカスタムUIを使用
-        });
-    </script>
-
     <!-- A-Frameシーンの設定 -->
-    <!-- arjs: trackingMethod: best を設定し、マーカーレス（NFT）モードを有効にします -->
     <a-scene 
+        id="ar-scene"
         embedded 
         arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
         renderer="logarithmicDepthBuffer: true;"
     >
         <!-- 
-            アート作品を配置するためのコンテナエンティティ。
-            マーカーレスモードでは、このエンティティが仮想世界の中の特定の位置に固定されます。
-            position="0 0 -5" は、カメラから5メートル先の位置（初期位置）にアートを配置します。
+            アセット定義エリア: 描画キャンバスのテクスチャをここに定義します。
+            IDはJavaScriptから動的にテクスチャソースとして設定されます。
         -->
-        <a-entity position="0 0 -5" rotation="0 0 0">
+        <a-assets>
+            <canvas id="ar-canvas-texture" crossorigin="anonymous"></canvas>
+            <!-- 描画内容をAR空間の平面に適用するためのテクスチャ。動的に更新されます。 -->
+            <img id="drawing-img" src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=" crossorigin="anonymous">
+        </a-assets>
 
-            <!-- 
-                アート作品1: ピンクの回転するボックス
-                position: コンテナエンティティの中心からの相対位置
-            -->
-            <a-box 
-                color="#FF69B4" 
-                position="-1 0.5 0" 
-                rotation="0 45 45"
-                scale="1 1 1"
+        <!-- 
+            ARアート作品（平面）を配置するためのコンテナエンティティ。
+            この中に、ユーザーの描いた絵がテクスチャとして適用された平面を入れます。
+        -->
+        <a-entity id="drawing-container" position="0 0 -5" rotation="0 0 0">
+            <!-- ユーザーが描いた絵を表示する平面 -->
+            <a-plane 
+                id="ar-drawing-plane"
+                src="#drawing-img" 
+                width="2" 
+                height="2" 
+                position="0 1 0" 
+                rotation="-90 0 0" 
                 shadow="receive: true; cast: true"
-                animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear;"
-            >
-                <!-- ボックスの上にテキストを追加 -->
-                <a-text 
-                    value="抽象的なARアート" 
-                    align="center" 
-                    position="0 1.2 0" 
-                    width="4"
-                    color="#FFFFFF"
-                ></a-text>
-            </a-box>
-
-            <!-- 
-                アート作品2: 水色の浮遊する球体
-                position: コンテナエンティティの中心からの相対位置
-            -->
-            <a-sphere 
-                color="#00FFFF" 
-                radius="0.5" 
-                position="1 0.5 -1"
-                shadow="receive: true; cast: true"
-                animation="property: position; to: 1 1.5 -1; dir: alternate; loop: true; dur: 3000; easing: easeInOutQuad;"
-            ></a-sphere>
+                color="#FFFFFF"
+                material="shader: standard; metalness: 0.1; roughness: 0.8; transparent: true; opacity: 1;"
+            ></a-plane>
+            <a-text 
+                id="drawing-label"
+                value="共同ARキャンバス" 
+                align="center" 
+                position="0 2.1 0" 
+                width="5"
+                color="#E0E0E0"
+                rotation="-90 0 0" 
+            ></a-text>
 
         </a-entity>
 
         <!-- カメラとライトの設定 -->
         <a-entity light="type: ambient; color: #BBB; intensity: 0.5;"></a-entity>
-        <a-entity light="type: directional; color: #FFF; intensity: 0.8;" position="-1 1 1"></a-entity>
+        <a-entity light="type: directional; color: #FFF; intensity: 0.8; target: #ar-drawing-plane;" position="-1 5 3"></a-entity>
         
         <!-- AR体験のためのカメラ。AR.jsによって自動的に設定されます。 -->
         <a-entity camera></a-entity>
     </a-scene>
+    
+    <!-- 描画UIエリア -->
+    <div id="drawing-ui">
+        <canvas id="draw-canvas" width="300" height="200"></canvas>
+        <div class="controls">
+            <button id="save-button" class="control-button">🎨 AR空間に反映＆保存</button>
+            <button id="clear-button" class="control-button">🗑️ クリア</button>
+        </div>
+        <p style="font-size: 0.75rem; color: #aaa; margin-top: 5px;">この描画はリアルタイムで他のユーザーと共有されます</p>
+    </div>
+
+    <!-- 描画とAR反映ロジック -->
+    <script>
+        // 描画関連のDOM要素
+        const drawCanvas = document.getElementById('draw-canvas');
+        const ctx = drawCanvas.getContext('2d');
+        const saveButton = document.getElementById('save-button');
+        const clearButton = document.getElementById('clear-button');
+        
+        // ARテクスチャ用の要素
+        const arDrawingImg = document.getElementById('drawing-img');
+        const arDrawingPlane = document.getElementById('ar-drawing-plane');
+        const loadingMessage = document.getElementById('loading-message');
+
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        let brushColor = '#000000';
+        let brushSize = 5;
+
+        // 初期化処理
+        function setupDrawing() {
+            // 初期描画
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+            ctx.lineJoin = 'round';
+            ctx.lineCap = 'round';
+            ctx.lineWidth = brushSize;
+            ctx.strokeStyle = brushColor;
+
+            // マウス/タッチイベントリスナーを設定
+            drawCanvas.addEventListener('mousedown', (e) => startDrawing(e));
+            drawCanvas.addEventListener('mousemove', (e) => draw(e));
+            drawCanvas.addEventListener('mouseup', () => stopDrawing());
+            drawCanvas.addEventListener('mouseout', () => stopDrawing());
+            
+            drawCanvas.addEventListener('touchstart', (e) => {
+                e.preventDefault(); // スクロールを防ぐ
+                startDrawing(e.touches[0]);
+            });
+            drawCanvas.addEventListener('touchmove', (e) => {
+                e.preventDefault(); // スクロールを防ぐ
+                draw(e.touches[0]);
+            });
+            drawCanvas.addEventListener('touchend', () => stopDrawing());
+
+            clearButton.addEventListener('click', clearCanvas);
+            saveButton.addEventListener('click', saveDrawing);
+        }
+
+        // 描画開始
+        function startDrawing(e) {
+            isDrawing = true;
+            [lastX, lastY] = [e.offsetX || (e.clientX - drawCanvas.getBoundingClientRect().left), 
+                              e.offsetY || (e.clientY - drawCanvas.getBoundingClientRect().top)];
+        }
+
+        // 描画中
+        function draw(e) {
+            if (!isDrawing) return;
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+            ctx.lineTo(e.offsetX || (e.clientX - drawCanvas.getBoundingClientRect().left), 
+                       e.offsetY || (e.clientY - drawCanvas.getBoundingClientRect().top));
+            ctx.stroke();
+            [lastX, lastY] = [e.offsetX || (e.clientX - drawCanvas.getBoundingClientRect().left), 
+                              e.offsetY || (e.clientY - drawCanvas.getBoundingClientRect().top)];
+        }
+
+        // 描画終了
+        function stopDrawing() {
+            isDrawing = false;
+        }
+
+        // キャンバスを白でクリア
+        function clearCanvas() {
+            ctx.fillStyle = 'white';
+            ctx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+            // AR空間にも反映（保存処理は別）
+            updateARTexture();
+        }
+
+        // ARテクスチャを更新
+        function updateARTexture() {
+            // 描画キャンバスの内容をBase64データURLとして取得
+            const dataUrl = drawCanvas.toDataURL('image/png');
+            
+            // A-Frameのテクスチャソース（img要素）を更新
+            arDrawingImg.setAttribute('src', dataUrl);
+            
+            // A-Frameのコンポーネントシステムにテクスチャ変更を通知
+            const material = arDrawingPlane.components.material;
+            if (material) {
+                material.map.needsUpdate = true;
+            } else {
+                // 初回ロード時はまだmaterialがない可能性があるため、再設定
+                arDrawingPlane.setAttribute('material', 'src', '#drawing-img');
+            }
+        }
+
+        // Firebaseへの保存とARへの反映
+        async function saveDrawing() {
+            if (!window.firebase || !window.firebase.db || !window.firebase.userId) {
+                console.error("Firebase is not initialized or user ID is missing.");
+                return;
+            }
+
+            // ARテクスチャを更新 (まずローカルに反映)
+            updateARTexture();
+            
+            // 描画データをBase64として取得
+            const base64Image = drawCanvas.toDataURL('image/png');
+
+            try {
+                // Firestoreへの保存パスを設定
+                const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+                // Publicデータとして保存し、全ユーザーで共有できるようにします
+                const docRef = doc(window.firebase.db, 'artifacts', appId, 'public', 'data', 'ar_drawings', 'current_drawing');
+                
+                await setDoc(docRef, {
+                    base64Image: base64Image,
+                    artistId: window.firebase.userId,
+                    timestamp: serverTimestamp(),
+                    width: drawCanvas.width,
+                    height: drawCanvas.height
+                });
+                
+                console.log("Drawing successfully saved to Firestore.");
+            } catch (e) {
+                console.error("Error saving document: ", e);
+                // カスタムUIでエラーを表示（alertは使用しない）
+                alert('保存中にエラーが発生しました。コンソールを確認してください。');
+            }
+        }
+        
+        // Firestoreからのデータ監視
+        function startFirestoreListener() {
+            const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
+            const colRef = collection(window.firebase.db, 'artifacts', appId, 'public', 'data', 'ar_drawings');
+            const docRef = doc(colRef, 'current_drawing');
+
+            // リアルタイムリスナーを設定
+            onSnapshot(docRef, (docSnap) => {
+                if (docSnap.exists()) {
+                    const data = docSnap.data();
+                    const base64Image = data.base64Image;
+                    
+                    if (base64Image) {
+                        console.log("New drawing received from Firestore.");
+                        
+                        // 画像を一旦img要素にロードし、それがロード完了したらCanvasに描画
+                        const tempImg = new Image();
+                        tempImg.onload = () => {
+                            // 受信した画像をローカルの描画キャンバスに反映
+                            ctx.drawImage(tempImg, 0, 0, drawCanvas.width, drawCanvas.height);
+                            // ARテクスチャも更新
+                            updateARTexture(); 
+                        };
+                        tempImg.src = base64Image;
+                    }
+                } else {
+                    console.log("No collaborative drawing found. Initializing local canvas.");
+                    clearCanvas(); // データがない場合はキャンバスをクリア
+                }
+            }, (error) => {
+                console.error("Error listening to Firestore: ", error);
+            });
+        }
+
+
+        // AR.jsがシーンをロード完了したら、メッセージを非表示にする
+        document.querySelector('a-scene').addEventListener('arjs-original-contents-loaded', function () {
+            loadingMessage.style.display = 'none';
+        });
+
+        // アプリケーション全体のエントリーポイント
+        window.initApp = function() {
+            setupDrawing();
+            startFirestoreListener();
+            updateARTexture(); // 初期テクスチャをセット
+        }
+
+        // Firebaseの認証準備が整うまで待つ（上記type="module"スクリプト内でコールされる）
+        if (authReady) {
+            window.initApp();
+        }
+    </script>
     
 </body>
 </html>
