@@ -1,0 +1,113 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>ARアートギャラリー（マーカーレス）</title>
+    
+    <!-- A-FrameとAR.jsのライブラリを読み込みます -->
+    <!-- WebAR体験を作るための必須ライブラリです -->
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <!-- マーカーレスARでは、AR.jsの最新版ビルドを使用します -->
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar-nft.js"></script>
+
+    <style>
+        /* AR体験を全画面表示するためのスタイル */
+        body { margin: 0; overflow: hidden; }
+        /* ロード中のメッセージを中央に表示するためのスタイル */
+        #loading-message {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 15px;
+            border-radius: 8px;
+            z-index: 999;
+            font-size: 1.1rem;
+            text-align: center;
+        }
+    </style>
+</head>
+<body>
+
+    <!-- AR体験ロード中のメッセージ -->
+    <div id="loading-message">
+        カメラを起動し、平らな場所をゆっくりと映してください。
+        <br>
+        AR空間が認識されると、アート作品が出現します。
+    </div>
+    
+    <!-- JavaScriptでメッセージを非表示にするためのリスナー -->
+    <script>
+        document.addEventListener('arjs-original-contents-loaded', function () {
+            const message = document.getElementById('loading-message');
+            if (message) {
+                message.style.display = 'none';
+            }
+            // ユーザーにタップを促すメッセージを一時的に表示することもできます
+            // 例: alert("画面をタップしてアートを配置してください！"); の代わりにカスタムUIを使用
+        });
+    </script>
+
+    <!-- A-Frameシーンの設定 -->
+    <!-- arjs: trackingMethod: best を設定し、マーカーレス（NFT）モードを有効にします -->
+    <a-scene 
+        embedded 
+        arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
+        renderer="logarithmicDepthBuffer: true;"
+    >
+        <!-- 
+            アート作品を配置するためのコンテナエンティティ。
+            マーカーレスモードでは、このエンティティが仮想世界の中の特定の位置に固定されます。
+            position="0 0 -5" は、カメラから5メートル先の位置（初期位置）にアートを配置します。
+        -->
+        <a-entity position="0 0 -5" rotation="0 0 0">
+
+            <!-- 
+                アート作品1: ピンクの回転するボックス
+                position: コンテナエンティティの中心からの相対位置
+            -->
+            <a-box 
+                color="#FF69B4" 
+                position="-1 0.5 0" 
+                rotation="0 45 45"
+                scale="1 1 1"
+                shadow="receive: true; cast: true"
+                animation="property: rotation; to: 0 360 0; loop: true; dur: 8000; easing: linear;"
+            >
+                <!-- ボックスの上にテキストを追加 -->
+                <a-text 
+                    value="抽象的なARアート" 
+                    align="center" 
+                    position="0 1.2 0" 
+                    width="4"
+                    color="#FFFFFF"
+                ></a-text>
+            </a-box>
+
+            <!-- 
+                アート作品2: 水色の浮遊する球体
+                position: コンテナエンティティの中心からの相対位置
+            -->
+            <a-sphere 
+                color="#00FFFF" 
+                radius="0.5" 
+                position="1 0.5 -1"
+                shadow="receive: true; cast: true"
+                animation="property: position; to: 1 1.5 -1; dir: alternate; loop: true; dur: 3000; easing: easeInOutQuad;"
+            ></a-sphere>
+
+        </a-entity>
+
+        <!-- カメラとライトの設定 -->
+        <a-entity light="type: ambient; color: #BBB; intensity: 0.5;"></a-entity>
+        <a-entity light="type: directional; color: #FFF; intensity: 0.8;" position="-1 1 1"></a-entity>
+        
+        <!-- AR体験のためのカメラ。AR.jsによって自動的に設定されます。 -->
+        <a-entity camera></a-entity>
+    </a-scene>
+    
+</body>
+</html>
