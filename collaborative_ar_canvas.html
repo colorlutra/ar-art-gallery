@@ -31,19 +31,19 @@
         left: 0;
         right: 0;
         z-index: 10;
-        background-color: rgba(0, 0, 0, 0.8);
+        background-color: rgba(10, 10, 10, 0.95); /* より暗く、コントラストを上げる */
         padding: 15px;
         box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.7);
       }
       
       /* 描画キャンバス (ユーザーが実際に操作するキャンバス) */
       #ui-drawing-canvas {
-        background-color: #1a1a1a;
-        border: 2px solid #6f42c1; /* 紫の枠 */
+        background-color: #222222; /* 濃いグレー */
+        border: 2px solid #a78bfa; /* 紫の枠を少し明るく */
         border-radius: 8px;
         touch-action: none; /* ドローイング中にページスクロールを防止 */
         width: 100%;
-        height: 150px;
+        height: 180px; /* 描画しやすいよう高さを少し上げる */
         margin-bottom: 15px;
       }
       
@@ -53,6 +53,7 @@
           justify-content: space-between;
           align-items: center;
           gap: 15px;
+          flex-wrap: wrap; /* モバイルでの折り返し */
       }
 
       /* アクションボタンズのスタイル */
@@ -64,16 +65,18 @@
         cursor: pointer;
         transition: background-color 0.2s, transform 0.1s;
         box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
+        min-width: 80px;
       }
 
       /* カラーピッカーのスタイル */
       #color-picker {
-          width: 30px;
-          height: 30px;
+          width: 35px;
+          height: 35px;
           padding: 0;
           border-radius: 50%;
-          border: 2px solid white;
+          border: 3px solid white;
           cursor: pointer;
+          min-width: 35px;
       }
     </style>
   </head>
@@ -118,8 +121,8 @@
             </div>
 
             <div class="flex space-x-3">
-                <button id="clear-button" class="action-button bg-red-600 text-white hover:bg-red-700">クリア</button>
-                <button id="save-button" class="action-button bg-blue-600 text-white hover:bg-blue-700">ARに保存</button>
+                <button id="clear-button" class="action-button bg-red-600 text-white hover:bg-red-700">🗑️ クリア</button>
+                <button id="save-button" class="action-button bg-blue-600 text-white hover:bg-blue-700">💾 ARに保存</button>
             </div>
         </div>
     </div>
@@ -160,7 +163,6 @@
                 }
             } catch (error) {
                 console.error("Firebase Authentication error:", error);
-                // 認証エラー時も匿名サインインを試みる
                 await signInAnonymously(auth);
             }
         }
@@ -193,12 +195,13 @@
                     if (base64Image) {
                         const img = new Image();
                         img.onload = () => {
+                            const uiCtx = uiCanvas.getContext('2d');
+                            
                             // 1. ARテクスチャキャンバスに描画
                             textureCtx.clearRect(0, 0, textureCtx.canvas.width, textureCtx.canvas.height);
                             textureCtx.drawImage(img, 0, 0);
                             
                             // 2. UIキャンバスに描画
-                            const uiCtx = uiCanvas.getContext('2d');
                             uiCtx.clearRect(0, 0, uiCanvas.width, uiCanvas.height);
                             uiCtx.drawImage(img, 0, 0);
 
@@ -244,7 +247,7 @@
                 saveButton.textContent = '保存エラー';
             } finally {
                 setTimeout(() => {
-                    saveButton.textContent = 'ARに保存';
+                    saveButton.textContent = '💾 ARに保存';
                     saveButton.disabled = false;
                 }, 2000);
             }
@@ -278,10 +281,22 @@
             let lastX = 0;
             let lastY = 0;
 
-            uiCtx.lineCap = 'round';
-            uiCtx.lineJoin = 'round';
-            uiCtx.strokeStyle = colorPicker ? colorPicker.value : '#FF0000';
-            uiCtx.lineWidth = lineWidthInput ? parseInt(lineWidthInput.value) : 15;
+            // 初期設定 (両コンテキストに適用)
+            const configureContexts = (color, width) => {
+                uiCtx.lineCap = 'round';
+                uiCtx.lineJoin = 'round';
+                uiCtx.strokeStyle = color;
+                uiCtx.lineWidth = width;
+                
+                textureCtx.lineCap = 'round';
+                textureCtx.lineJoin = 'round';
+                textureCtx.strokeStyle = color;
+                textureCtx.lineWidth = width;
+            };
+
+            const initialColor = colorPicker ? colorPicker.value : '#FF0000';
+            const initialWidth = lineWidthInput ? parseInt(lineWidthInput.value) : 15;
+            configureContexts(initialColor, initialWidth);
             
             // 描画イベント開始 (マウスダウン/タッチスタート)
             function startDrawing(e) {
@@ -290,36 +305,59 @@
                 
                 const [coordsX, coordsY] = getCoordinates(e);
 
+                if (isNaN(coordsX) || isNaN(coordsY)) {
+                    isDrawing = false;
+                    return;
+                }
+                
                 isDrawing = true;
                 [lastX, lastY] = [coordsX, coordsY];
-                draw(e, true);
+                
+                // ★改善点: 最初のクリックで点を打つ (lineToでは点が描画されないため)
+                const currentWidth = lineWidthInput ? parseInt(lineWidthInput.value) : 15;
+                const radius = currentWidth / 2;
+
+                // UIキャンバスに描画 (点)
+                uiCtx.beginPath();
+                uiCtx.arc(lastX, lastY, radius, 0, Math.PI * 2);
+                uiCtx.fillStyle = colorPicker.value;
+                uiCtx.fill();
+                
+                // ARテクスチャキャンバスに描画 (点)
+                textureCtx.beginPath();
+                textureCtx.arc(lastX, lastY, radius, 0, Math.PI * 2);
+                textureCtx.fillStyle = colorPicker.value;
+                textureCtx.fill();
+
+                forceArTextureUpdate();
             }
 
             // 描画処理 (マウスムーブ/タッチムーブ)
-            function draw(e, isSinglePoint = false) {
-                if (!e || (!isDrawing && !isSinglePoint)) return; 
+            function draw(e) {
+                if (!e || !isDrawing) return; 
                 
                 try {
                     e.preventDefault();
                     
                     const [currentX, currentY] = getCoordinates(e);
+
+                    // ★改善点: 座標が不正な値なら描画しない
+                    if (isNaN(currentX) || isNaN(currentY)) {
+                        return;
+                    }
                     
                     const color = colorPicker ? colorPicker.value : '#FFFFFF';
                     const width = lineWidthInput ? parseInt(lineWidthInput.value) : 15;
 
-                    // --- 描画実行 ---
-                    uiCtx.strokeStyle = color;
-                    uiCtx.lineWidth = width;
-                    textureCtx.strokeStyle = color;
-                    textureCtx.lineWidth = width;
+                    configureContexts(color, width); // 最新の色と線幅をコンテキストに設定
 
-                    // UIキャンバスに描画
+                    // UIキャンバスに線を描画
                     uiCtx.beginPath();
                     uiCtx.moveTo(lastX, lastY);
                     uiCtx.lineTo(currentX, currentY);
                     uiCtx.stroke();
                     
-                    // テクスチャキャンバス (AR用) に描画を反映
+                    // ARテクスチャキャンバス (AR用) に線を描画
                     textureCtx.beginPath();
                     textureCtx.moveTo(lastX, lastY);
                     textureCtx.lineTo(currentX, currentY);
@@ -327,10 +365,8 @@
 
                     [lastX, lastY] = [currentX, currentY];
                     
-                    // AR Texture Update
                     forceArTextureUpdate();
                 } catch (error) {
-                    // エラーが発生したら描画を停止
                     console.error("Drawing error caught and contained:", error);
                     isDrawing = false;
                 }
@@ -353,8 +389,13 @@
                     clientX = e.clientX;
                     clientY = e.clientY;
                 } else {
-                    // 座標が取得できない場合は最後の座標を返す
-                    return [lastX, lastY]; 
+                    // 座標が取得できない場合は不正な値を返す
+                    return [NaN, NaN]; 
+                }
+                
+                // ★改善点: clientX/Yが有効な数値であるか最終チェック
+                if (typeof clientX !== 'number' || typeof clientY !== 'number' || isNaN(clientX) || isNaN(clientY)) {
+                    return [NaN, NaN];
                 }
                 
                 const x = clientX - rect.left;
@@ -369,27 +410,26 @@
 
 
             // --- イベントリスナー ---
-            // マウスイベント
             uiCanvas.addEventListener('mousedown', startDrawing);
             uiCanvas.addEventListener('mousemove', draw);
-            uiCanvas.addEventListener('mouseup', stopDrawing);
-            uiCanvas.addEventListener('mouseout', stopDrawing);
+            document.addEventListener('mouseup', stopDrawing); // キャンバス外でのリリースも補足
 
-            // タッチイベント (モバイル向け)
             uiCanvas.addEventListener('touchstart', startDrawing);
             uiCanvas.addEventListener('touchmove', draw);
-            uiCanvas.addEventListener('touchend', stopDrawing);
+            document.addEventListener('touchend', stopDrawing); // キャンバス外でのリリースも補足
 
             // コントロール変更リスナー
             if (colorPicker) {
                 colorPicker.addEventListener('input', (e) => {
-                    uiCtx.strokeStyle = e.target.value;
+                    const width = lineWidthInput ? parseInt(lineWidthInput.value) : 15;
+                    configureContexts(e.target.value, width);
                 });
             }
             
             if (lineWidthInput) {
                 lineWidthInput.addEventListener('input', (e) => {
-                    uiCtx.lineWidth = parseInt(e.target.value);
+                    const color = colorPicker ? colorPicker.value : '#FF0000';
+                    configureContexts(color, parseInt(e.target.value));
                 });
             }
             
