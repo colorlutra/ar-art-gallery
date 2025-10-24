@@ -97,9 +97,47 @@
         box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
         min-width: 80px;
       }
+      
+      /* --- 追加: カメラアクセス誘導用のオーバーレイ --- */
+      #ar-status-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 100; /* 最前面 */
+        background-color: rgba(0, 0, 0, 0.95);
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        color: white;
+        text-align: center;
+        font-size: 1.2rem;
+        padding: 20px;
+        transition: opacity 0.5s ease-in-out;
+        pointer-events: auto; /* クリックを受け付ける */
+      }
+      
+      /* ARシーンがロードされたら非表示にする */
+      .ar-loaded #ar-status-overlay {
+          opacity: 0;
+          pointer-events: none; /* クリックを透過させる */
+      }
     </style>
   </head>
   <body>
+    <!-- カメラアクセス誘導オーバーレイ (画面が真っ白な問題に対応) -->
+    <div id="ar-status-overlay" class="space-y-6">
+        <h1 class="text-3xl font-bold mb-4 text-purple-400">AR共同キャンバスを起動中...</h1>
+        <div class="p-6 bg-gray-800 rounded-xl shadow-lg w-11/12 max-w-sm space-y-3">
+            <p class="mb-2 text-lg font-semibold">【重要】カメラ許可のお願い</p>
+            <p class="text-sm text-gray-300">1. ブラウザに表示される「カメラの使用許可」ダイアログで**必ず許可**をタップしてください。</p>
+            <p class="text-sm text-gray-300">2. **この画面が消えない場合**は、ブラウザの設定でカメラアクセスがブロックされていないか確認してください。（特にiOS/Safari）</p>
+        </div>
+        <p class="text-sm text-gray-500">（許可後、ARシーンが表示されれば、この画面は自動で消えます）</p>
+    </div>
+
     <!-- A-Frame assetsにテクスチャ用キャンバスを定義 (これは描画されず、データ保持のみ) -->
     <a-assets>
         <canvas id="texture-canvas" width="512" height="512"></canvas> 
@@ -315,6 +353,7 @@
             // --- キャンバス要素の初期チェック ---
             const uiCanvas = document.getElementById('ui-drawing-canvas');
             const textureCanvas = document.getElementById('texture-canvas');
+            const arStatusOverlay = document.getElementById('ar-status-overlay');
 
             if (!uiCanvas || !textureCanvas) {
                 console.error("致命的なエラー: UIキャンバスまたはテクスチャキャンバス要素がDOMに見つかりませんでした。");
@@ -370,6 +409,23 @@
             authenticate().then(() => {
                 setupRealtimeListener(uiCanvas, textureCtx);
             });
+
+            // --- AR Scene Loaded Check (画面が真っ白な問題に対応) ---
+            const aScene = document.querySelector('a-scene');
+            if (aScene && arStatusOverlay) {
+                // A-Frameのloadedイベントをリッスンし、ARシーンが起動したらオーバーレイを非表示にする
+                aScene.addEventListener('loaded', () => {
+                    // ARシーンが完全にロードされても、カメラが起動していない可能性があるため、
+                    // ユーザーがキャンバスを操作できるように、まずはオーバーレイを薄くします。
+                    arStatusOverlay.style.opacity = '0.1';
+                    
+                    // AR.jsがカメラ映像を配置し、シーンが描画された後に完全に非表示にする
+                    // AR.jsの内部的なカメラ初期化を待つために少し遅延させる
+                    setTimeout(() => {
+                        document.body.classList.add('ar-loaded');
+                    }, 3000); 
+                });
+            }
 
             // --- Drawing Logic Setup ---
             let isDrawing = false;
