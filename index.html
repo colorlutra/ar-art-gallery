@@ -101,7 +101,16 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            /* UIを画面外に隠す設定 */
+            transform: translateY(100%);
+            transition: transform 0.3s ease-out; /* スムーズなアニメーション */
         }
+
+        /* UIが表示されている状態 */
+        #drawing-ui.open {
+            transform: translateY(0);
+        }
+
 
         /* 描画キャンバスのスタイル */
         #draw-canvas {
@@ -182,6 +191,64 @@
         #clear-button:hover {
             background-color: #E53935;
         }
+        
+        /* --- トグルボタンのスタイル --- */
+        #toggle-drawing-button {
+            position: fixed;
+            bottom: 10px; /* UIが閉じているときの初期位置 */
+            right: 10px;
+            z-index: 1001; /* UIより上に配置 */
+            padding: 15px;
+            border: none;
+            border-radius: 50%; /* 円形にする */
+            background-color: #3f51b5; /* Blue */
+            color: white;
+            font-size: 1.5rem;
+            font-weight: bold;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+            cursor: pointer;
+            transition: background-color 0.2s, transform 0.1s;
+            line-height: 1; /* アイコンの縦位置調整 */
+            width: 50px; /* ボタンのサイズを固定 */
+            height: 50px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        #toggle-drawing-button:hover {
+            background-color: #303f9f;
+        }
+
+        #toggle-drawing-button:active {
+            transform: scale(0.95);
+        }
+
+        /* UIが開いているときはトグルボタンを非表示にする */
+        #drawing-ui.open ~ #toggle-drawing-button {
+            display: none;
+        }
+        
+        /* 閉じるボタン（UIの中に配置） */
+        #close-ui-button {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 1.5rem;
+            cursor: pointer;
+            padding: 5px;
+            line-height: 1;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        }
+        
+        #close-ui-button:hover {
+            opacity: 1;
+        }
+
     </style>
 </head>
 <body>
@@ -247,8 +314,14 @@
         <a-entity camera></a-entity>
     </a-scene>
     
+    <!-- --- 新規追加: 描画UIを開くトグルボタン --- -->
+    <button id="toggle-drawing-button" title="描画UIを開く">🎨</button>
+
     <!-- 描画UIエリア -->
     <div id="drawing-ui">
+        <!-- --- 新規追加: 閉じるボタン --- -->
+        <button id="close-ui-button" title="閉じる">✕</button>
+
         <canvas id="draw-canvas" width="300" height="200"></canvas>
         <div class="controls">
             <!-- 描画オプション（色とサイズ）を追加 -->
@@ -279,6 +352,11 @@
         const brushSizeSlider = document.getElementById('brush-size-slider');
         const brushSizeValue = document.getElementById('brush-size-value');
         
+        // --- 新規追加/変更: UI開閉関連のDOM要素 ---
+        const toggleButton = document.getElementById('toggle-drawing-button');
+        const drawingUI = document.getElementById('drawing-ui');
+        const closeUIButton = document.getElementById('close-ui-button');
+        
         // ARテクスチャ用の要素
         const arDrawingImg = document.getElementById('drawing-img');
         const arDrawingPlane = document.getElementById('ar-drawing-plane');
@@ -300,6 +378,11 @@
             ctx.lineWidth = brushSize;
             ctx.strokeStyle = brushColor;
             brushSizeValue.textContent = brushSize; // スライダーの初期値を表示
+
+            // --- 新規追加: UI開閉イベント ---
+            toggleButton.addEventListener('click', () => toggleDrawingUI(true)); // 開く
+            closeUIButton.addEventListener('click', () => toggleDrawingUI(false)); // 閉じる
+
 
             // マウス/タッチイベントリスナーを設定
             drawCanvas.addEventListener('mousedown', (e) => startDrawing(e));
@@ -332,6 +415,16 @@
                 brushSizeValue.textContent = brushSize; // 値をリアルタイム表示
             });
         }
+        
+        // --- 新規追加: 描画UIの開閉機能 ---
+        function toggleDrawingUI(shouldOpen) {
+            if (shouldOpen) {
+                drawingUI.classList.add('open');
+            } else {
+                drawingUI.classList.remove('open');
+            }
+        }
+
 
         // 描画開始
         function startDrawing(e) {
@@ -479,6 +572,8 @@
             setupDrawing();
             startFirestoreListener();
             updateARTexture(); // 初期テクスチャをセット
+            // アプリ起動時はUIを閉じた状態にする
+            toggleDrawingUI(false); 
         }
 
         // Firebaseの認証準備が整うまで待つ（上記type="module"スクリプト内でコールされる）
