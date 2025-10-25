@@ -36,6 +36,11 @@
             padding: 10px 15px;
             font-size: 16px;
             cursor: pointer;
+            border: 1px solid #ccc;
+            background-color: #eee;
+        }
+        button:active {
+            background-color: #ddd;
         }
     </style>
 </head>
@@ -44,8 +49,8 @@
 <canvas id="drawingCanvas"></canvas>
 
 <div id="controls">
-    <button onclick="clearCanvas()">リセット</button>
-    <button onclick="applyDrawing()">ARに反映！</button>
+    <button id="resetButton">新しく描く (リセット)</button>
+    <button id="applyButton">ARに反映！</button>
 </div>
 
 <a-scene
@@ -53,8 +58,8 @@
     arjs='sourceType: webcam; detectionMode: mono; cameraParametersUrl: data/camera_para.dat;'
     vr-mode-ui="enabled: false">
 
-    <a-entity position="0 0 -2">
-        <a-plane id="drawingPlane" width="1.5" height="2.5" rotation="0 0 0" color="#FFFFFF" transparent="true" opacity="1"></a-plane>
+    <a-entity position="0 0 -3">
+        <a-plane id="drawingPlane" width="1" height="1" rotation="0 0 0" color="#FFFFFF" transparent="true" opacity="1"></a-plane>
     </a-entity>
 
     <a-camera-static/>
@@ -69,118 +74,16 @@
     let lastX = 0;
     let lastY = 0;
     
-    // キャンバスを画面サイズに合わせる
+    // キャンバスを画面サイズに合わせる & 設定を初期化
     function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
+        
         // リサイズ時に描画設定を再設定
         ctx.strokeStyle = '#FF0000'; // 赤
         ctx.lineWidth = 10;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
-    }
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas(); // 初期設定
-
-    function draw(e) {
-        if (!isDrawing) return;
-
-        // タッチイベントまたはマウスイベントから座標を取得
-        const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-        const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(clientX, clientY);
-        ctx.stroke();
-        [lastX, lastY] = [clientX, clientY];
-    }
-
-    // イベントリスナーの設定（マウスとタッチの両方に対応）
-    // 開始
-    ['mousedown', 'touchstart'].forEach(eventName => {
-        canvas.addEventListener(eventName, (e) => {
-            isDrawing = true;
-            // タッチイベントの場合は座標を取得
-            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-
-            [lastX, lastY] = [clientX, clientY];
-            draw(e); // クリック（タッチ）した点から描画開始
-        }, false);
-    });
-
-    // 移動
-    ['mousemove', 'touchmove'].forEach(eventName => {
-        canvas.addEventListener(eventName, draw, false);
-    });
-
-    // 終了
-    ['mouseup', 'touchend', 'mouseout'].forEach(eventName => {
-        canvas.addEventListener(eventName, () => isDrawing = false, false);
-    });
-
-    /**
-     * 描画内容をリセットする
-     */
-    function clearCanvas() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height);
-    }
-
-
-    // --- ARへの反映ロジック ---
-
-    const drawingPlane = document.getElementById('drawingPlane');
-    let texture = null; // テクスチャオブジェクトを保持する変数
-
-    /**
-     * Canvasの内容をAR空間のプレーンにテクスチャとして適用する
-     */
-    function applyDrawing() {
-        // 描画キャンバスの背景を透明にする
-        canvas.style.backgroundColor = 'transparent';
-
-        // 既存のテクスチャを解放
-        if (texture) {
-            texture.dispose();
-        }
-
-        // THREE.jsのCanvasTextureを作成 (A-Frameは内部でTHREE.jsを使用)
-        texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter; // フィルタ設定 (ぼやけ防止)
-        texture.needsUpdate = true; // 更新フラグ
-
-        // プレーンの材質を取得し、テクスチャを適用
-        const material = drawingPlane.getObject3D('mesh').material;
-        material.map = texture;
-        material.needsUpdate = true;
-
-        // 描画キャンバスを非表示（AR空間への反映後）
-        canvas.style.zIndex = -1;
-        document.getElementById('controls').style.display = 'none';
-
-        alert('AR空間に絵が反映されました！スマホを動かして見てね。');
-    }
-
-    // リセットボタンが押されたら、描画モードに戻る（画面表示の再設定）
-    // **注意:** AR空間の絵は消えません。消すには a-plane の map を null にする必要があります。
-    // 今回は「残る」という要件なので、このリセットは新しい絵を描くためのものです。
-    function resetCanvas() {
-        clearCanvas(); // 描画キャンバスをクリア
-        canvas.style.zIndex = 10; // 描画キャンバスを再表示
-        canvas.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
-        document.getElementById('controls').style.display = 'flex';
-
-        // AR空間の絵を消したい場合は以下のコードを追加
-        // const material = drawingPlane.getObject3D('mesh').material;
-        // material.map = null;
-        // material.needsUpdate = true;
-        // drawingPlane.setAttribute('color', '#FFFFFF'); // 再度白くする
-    }
-    
-    // リセットボタンに resetCanvas 関数を割り当てる (clearCanvasを上書き)
-    document.querySelector('#controls button:first-child').onclick = resetCanvas;
-
-</script>
-</body>
-</html>
+        
+        // !!! 描画線の即時消去を防ぐために、リサイズ時にクリア !!!
+        ctx.clearRect(0,
