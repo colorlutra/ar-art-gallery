@@ -17,7 +17,8 @@
             left: 0;
             z-index: 10; /* AR映像の上に表示 */
             touch-action: none; /* ドローイング中にページスクロール・ズームを防止 (重要) */
-            background-color: rgba(0, 0, 0, 0.3); /* 描画中は半透明の背景を表示 */
+            /* 背景を黒に変更し、線の色が分かりやすいようにします */
+            background-color: rgba(0, 0, 0, 0.5); 
         }
         #controls {
             position: fixed;
@@ -55,7 +56,7 @@
 
 <a-scene
     embedded
-    /* 修正済み: cameraParametersUrl を削除 */
+    /* cameraParametersUrl を削除し、デフォルト設定を使用 */
     arjs='sourceType: webcam; detectionMode: mono;'
     vr-mode-ui="enabled: false">
 
@@ -79,12 +80,12 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         
-        ctx.strokeStyle = '#FF0000'; // 赤
-        ctx.lineWidth = 10;
+        // 線の色を白に変更（デフォルトのキャンバス背景が黒のため見やすい）
+        ctx.strokeStyle = '#FFFFFF'; 
+        ctx.lineWidth = 15; // 線幅を少し太くしました
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
-        // !!! 修正済み: リサイズ時のみクリア。描画中にクリアはしない !!!
         ctx.clearRect(0, 0, canvas.width, canvas.height); 
     }
     
@@ -94,25 +95,28 @@
     function draw(e) {
         if (!isDrawing) return;
 
-        // !!! 重要: ブラウザのスクロール・ズームをキャンセルし、指の動きを線に集中させる !!!
+        // ブラウザのスクロール・ズームをキャンセル (最重要)
         e.preventDefault(); 
         
+        // タッチまたはマウスイベントから座標を取得
         const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
         const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
 
+        // 描画
         ctx.beginPath();
         ctx.moveTo(lastX, lastY);
         ctx.lineTo(clientX, clientY);
         ctx.stroke();
+        
+        // 座標を更新
         [lastX, lastY] = [clientX, clientY];
     }
 
-    // イベントリスナーの設定（マウスとタッチの両方に対応）
-    // passive: false を設定し、touchstart/touchmoveでpreventDefaultを有効にする
+    // イベントリスナーの設定
+    // passive: false でpreventDefaultを有効化
     ['mousedown', 'touchstart'].forEach(eventName => {
         canvas.addEventListener(eventName, (e) => {
             isDrawing = true;
-            // touchstartでもpreventDefault()を呼び出すことで、描画開始時のズームやスクロールを防ぐ
             e.preventDefault(); 
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
@@ -138,7 +142,7 @@
         // 描画キャンバスの背景を透明にする
         canvas.style.backgroundColor = 'transparent';
 
-        // AR空間のプレーンのサイズを画面の縦横比に合わせる (AR反映失敗の修正)
+        // AR空間のプレーンのサイズを画面の縦横比に合わせる
         const aspectRatio = canvas.height / canvas.width;
         const planeWidth = 2; 
         const planeHeight = planeWidth * aspectRatio;
@@ -170,7 +174,8 @@
     function resetDrawingMode() {
         ctx.clearRect(0, 0, canvas.width, canvas.height); 
         canvas.style.zIndex = 10; 
-        canvas.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        // 背景色を元の半透明の黒に戻す
+        canvas.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
         document.getElementById('controls').style.display = 'flex';
         
         alert('新しい絵を描いてください。AR空間の前の絵はそのまま残っています。');
