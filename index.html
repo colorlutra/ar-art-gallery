@@ -86,8 +86,9 @@
             font-size: 1.1rem;
             text-align: center;
             box-shadow: 0 4px 10px rgba(0, 0, 0, 0.5);
+            transition: opacity 0.5s ease; /* フェードアウト用 */
         }
-
+        
         /* 描画UIコンテナ */
         #drawing-ui {
             position: fixed;
@@ -264,7 +265,8 @@
     <a-scene 
         id="ar-scene"
         embedded 
-        arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false;"
+        arjs="sourceType: webcam; trackingMethod: best; debugUIEnabled: false; 
+              sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720;" 
         renderer="logarithmicDepthBuffer: true;"
     >
         <!-- 
@@ -352,7 +354,7 @@
         const brushSizeSlider = document.getElementById('brush-size-slider');
         const brushSizeValue = document.getElementById('brush-size-value');
         
-        // --- 新規追加/変更: UI開閉関連のDOM要素 ---
+        // --- UI開閉関連のDOM要素 ---
         const toggleButton = document.getElementById('toggle-drawing-button');
         const drawingUI = document.getElementById('drawing-ui');
         const closeUIButton = document.getElementById('close-ui-button');
@@ -379,7 +381,7 @@
             ctx.strokeStyle = brushColor;
             brushSizeValue.textContent = brushSize; // スライダーの初期値を表示
 
-            // --- 新規追加: UI開閉イベント ---
+            // UI開閉イベント
             toggleButton.addEventListener('click', () => toggleDrawingUI(true)); // 開く
             closeUIButton.addEventListener('click', () => toggleDrawingUI(false)); // 閉じる
 
@@ -416,7 +418,7 @@
             });
         }
         
-        // --- 新規追加: 描画UIの開閉機能 ---
+        // 描画UIの開閉機能
         function toggleDrawingUI(shouldOpen) {
             if (shouldOpen) {
                 drawingUI.classList.add('open');
@@ -564,8 +566,29 @@
 
         // AR.jsがシーンをロード完了したら、メッセージを非表示にする
         document.querySelector('a-scene').addEventListener('arjs-original-contents-loaded', function () {
-            loadingMessage.style.display = 'none';
+            // AR.jsが成功した場合
+            loadingMessage.style.opacity = '0';
+            setTimeout(() => { loadingMessage.style.display = 'none'; }, 500); // フェードアウト後に非表示
+            console.log("AR.js content loaded successfully.");
         });
+
+        // AR初期化失敗時のフォールバック処理
+        // 5秒経ってもメッセージが消えない場合、手動で非表示にしてユーザーに操作させる
+        setTimeout(() => {
+            if (loadingMessage.style.opacity !== '0') {
+                loadingMessage.style.opacity = '0';
+                setTimeout(() => { loadingMessage.style.display = 'none'; }, 500);
+                console.warn("AR content load event timed out. Allowing user interaction.");
+                
+                // ARが動いていないことをユーザーに知らせるUIメッセージを一時的に表示しても良い
+                /* const fallbackMessage = document.createElement('div');
+                fallbackMessage.textContent = 'AR初期化がタイムアウトしました。カメラ許可を確認してください。';
+                fallbackMessage.style.cssText = 'position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: #FFC107; color: #333; padding: 10px; border-radius: 5px; z-index: 1001;';
+                document.body.appendChild(fallbackMessage);
+                setTimeout(() => fallbackMessage.remove(), 5000);
+                */
+            }
+        }, 8000); // 8秒のタイムアウト
 
         // アプリケーション全体のエントリーポイント
         window.initApp = function() {
