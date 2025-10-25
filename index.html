@@ -16,7 +16,7 @@
             top: 0;
             left: 0;
             z-index: 10; /* AR映像の上に表示 */
-            touch-action: none; /* タッチ操作を有効にするための設定 */
+            touch-action: none; /* ドローイング中にページスクロール・ズームを防止 (重要) */
             background-color: rgba(0, 0, 0, 0.3); /* 描画中は半透明の背景を表示 */
         }
         #controls {
@@ -55,9 +55,8 @@
 
 <a-scene
     embedded
-    
+    /* 修正済み: cameraParametersUrl を削除 */
     arjs='sourceType: webcam; detectionMode: mono;'
-    
     vr-mode-ui="enabled: false">
 
     <a-entity position="0 0 -3">
@@ -85,6 +84,7 @@
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
+        // !!! 修正済み: リサイズ時のみクリア。描画中にクリアはしない !!!
         ctx.clearRect(0, 0, canvas.width, canvas.height); 
     }
     
@@ -94,10 +94,11 @@
     function draw(e) {
         if (!isDrawing) return;
 
+        // !!! 重要: ブラウザのスクロール・ズームをキャンセルし、指の動きを線に集中させる !!!
+        e.preventDefault(); 
+        
         const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
         const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-        
-        e.preventDefault(); 
 
         ctx.beginPath();
         ctx.moveTo(lastX, lastY);
@@ -106,10 +107,13 @@
         [lastX, lastY] = [clientX, clientY];
     }
 
-    // イベントリスナーの設定
+    // イベントリスナーの設定（マウスとタッチの両方に対応）
+    // passive: false を設定し、touchstart/touchmoveでpreventDefaultを有効にする
     ['mousedown', 'touchstart'].forEach(eventName => {
         canvas.addEventListener(eventName, (e) => {
             isDrawing = true;
+            // touchstartでもpreventDefault()を呼び出すことで、描画開始時のズームやスクロールを防ぐ
+            e.preventDefault(); 
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
             [lastX, lastY] = [clientX, clientY];
@@ -118,7 +122,7 @@
     });
 
     ['mousemove', 'touchmove'].forEach(eventName => {
-        canvas.addEventListener(eventName, draw, { passive: false });
+        canvas.addEventListener(eventName, draw, { passive: false }); // touchmoveもpassive: false
     });
 
     ['mouseup', 'touchend', 'mouseout'].forEach(eventName => {
@@ -131,16 +135,15 @@
     let texture = null; 
 
     function applyDrawing() {
+        // 描画キャンバスの背景を透明にする
         canvas.style.backgroundColor = 'transparent';
 
+        // AR空間のプレーンのサイズを画面の縦横比に合わせる (AR反映失敗の修正)
         const aspectRatio = canvas.height / canvas.width;
         const planeWidth = 2; 
         const planeHeight = planeWidth * aspectRatio;
-
-        // AR空間のプレーンのサイズを更新
         drawingPlane.setAttribute('width', planeWidth);
         drawingPlane.setAttribute('height', planeHeight);
-        
         drawingPlane.setAttribute('position', `0 0 -3`); 
 
         if (texture) {
