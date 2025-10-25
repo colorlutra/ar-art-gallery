@@ -101,6 +101,9 @@
         ctx.beginPath(); 
         ctx.moveTo(clientX, clientY);
         
+        // タップ時にも点が打てるようにストロークを即時実行
+        ctx.stroke(); 
+        
         // 座標を更新
         [lastX, lastY] = [clientX, clientY];
     }
@@ -117,19 +120,18 @@
         // 最後の点から新しい点まで線を引く
         ctx.lineTo(clientX, clientY);
         
+        // パスに追加されたセグメントをすぐに描画して線が途切れないようにする
+        ctx.stroke(); 
+        
         // 座標を更新
         [lastX, lastY] = [clientX, clientY];
-        
-        // 描画が遅れるのを防ぐため、移動中でも描画を更新
-        ctx.stroke(); 
     }
 
     // ★ 修正3: 描画終了 (mouseup/touchend/mouseout)
     function stopDrawing() {
         if (!isDrawing) return;
         
-        // パスを終了
-        ctx.closePath(); 
+        // パスを閉じずに描画を終了する
         isDrawing = false;
     }
 
