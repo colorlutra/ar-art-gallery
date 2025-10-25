@@ -13,13 +13,20 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, collection, query, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        // 必要なFirestore関数を全てインポート
+        import { getFirestore, doc, setDoc, onSnapshot, collection, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // Firestoreログレベル設定 (デバッグ用)
         // setLogLevel('debug');
 
-        // グローバル変数としてFirebaseインスタンスを保持
+        // グローバル変数としてFirebaseインスタンスと関数を保持 (修正点1: グローバル化)
         window.firebase = {};
+        window.firebase.doc = doc;
+        window.firebase.setDoc = setDoc;
+        window.firebase.onSnapshot = onSnapshot;
+        window.firebase.collection = collection;
+        window.firebase.serverTimestamp = serverTimestamp;
+        
         let authReady = false;
 
         // Firebase設定をロード
@@ -95,9 +102,14 @@
             bottom: 0;
             left: 0;
             width: 100%;
+            /* 描画UIの最大幅を設定し、中央に配置 */
+            max-width: 600px; 
+            margin: 0 auto;
+            right: 0; /* max-widthと併用して中央寄せ */
+            
             padding: 10px;
-            background: rgba(20, 20, 30, 0.9);
-            box-shadow: 0 -5px 15px rgba(0, 0, 0, 0.5);
+            background: rgba(20, 20, 30, 0.95);
+            box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.7);
             z-index: 1000;
             display: flex;
             flex-direction: column;
@@ -105,6 +117,8 @@
             /* UIを画面外に隠す設定 */
             transform: translateY(100%);
             transition: transform 0.3s ease-out; /* スムーズなアニメーション */
+            border-top-left-radius: 15px;
+            border-top-right-radius: 15px;
         }
 
         /* UIが表示されている状態 */
@@ -113,9 +127,12 @@
         }
 
 
-        /* 描画キャンバスのスタイル */
+        /* 描画キャンバスのスタイル調整: 幅を広く */
         #draw-canvas {
             touch-action: none; /* タッチイベントの競合を防ぐ */
+            /* 最大幅をコンテナサイズに合わせる */
+            max-width: calc(100% - 20px); 
+            height: auto; 
             border: 2px solid #555;
             border-radius: 8px;
             background-color: white;
@@ -126,9 +143,11 @@
         /* コントロール全体 */
         .controls {
             display: flex;
+            flex-wrap: wrap; /* 小さい画面で折り返す */
             gap: 10px;
             margin-top: 10px;
             width: 100%;
+            padding: 0 5px;
             justify-content: center;
             align-items: center;
         }
@@ -138,10 +157,28 @@
             display: flex;
             align-items: center;
             gap: 15px;
-            margin-right: 15px;
-            padding-right: 15px;
+            padding: 5px 15px;
             border-right: 1px solid #444;
         }
+        
+        /* モバイルでの調整 */
+        @media (max-width: 600px) {
+            .controls {
+                flex-direction: column;
+            }
+            .drawing-options {
+                border-right: none;
+                border-bottom: 1px solid #444;
+                padding-bottom: 10px;
+                margin-bottom: 5px;
+                width: 100%;
+                justify-content: center;
+            }
+            .control-button {
+                width: 100%;
+            }
+        }
+
 
         /* 色ピッカーのスタイル */
         #color-picker {
@@ -153,7 +190,6 @@
             cursor: pointer;
             outline: none;
             box-shadow: 0 0 5px rgba(255, 255, 255, 0.3);
-            /* ブラウザのデフォルトの枠線を非表示にするため */
             background-color: transparent; 
         }
 
@@ -316,15 +352,16 @@
         <a-entity camera></a-entity>
     </a-scene>
     
-    <!-- --- 新規追加: 描画UIを開くトグルボタン --- -->
+    <!-- --- 描画UIを開くトグルボタン --- -->
     <button id="toggle-drawing-button" title="描画UIを開く">🎨</button>
 
     <!-- 描画UIエリア -->
     <div id="drawing-ui">
-        <!-- --- 新規追加: 閉じるボタン --- -->
+        <!-- --- 閉じるボタン --- -->
         <button id="close-ui-button" title="閉じる">✕</button>
 
-        <canvas id="draw-canvas" width="300" height="200"></canvas>
+        <!-- キャンバスのサイズを500x300に拡大 -->
+        <canvas id="draw-canvas" width="500" height="300"></canvas> 
         <div class="controls">
             <!-- 描画オプション（色とサイズ）を追加 -->
             <div class="drawing-options">
@@ -346,7 +383,7 @@
     <script>
         // 描画関連のDOM要素
         const drawCanvas = document.getElementById('draw-canvas');
-        const ctx = drawCanvas.getContext('2d');
+        // NOTE: Canvasの初期化はinitAppで行うため、ここではgetContextは行わない
         const saveButton = document.getElementById('save-button');
         const clearButton = document.getElementById('clear-button');
         // 追加したコントロール
@@ -364,14 +401,18 @@
         const arDrawingPlane = document.getElementById('ar-drawing-plane');
         const loadingMessage = document.getElementById('loading-message');
 
+        let ctx; // コンテキストをグローバルに保持
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
-        let brushColor = colorPicker.value; // 初期値はピッカーから取得
-        let brushSize = parseInt(brushSizeSlider.value, 10); // 初期値はスライダーから取得
+        let brushColor = colorPicker.value;
+        let brushSize = parseInt(brushSizeSlider.value, 10);
 
         // 初期化処理
         function setupDrawing() {
+            // ここでコンテキストを取得
+            ctx = drawCanvas.getContext('2d'); 
+            
             // 初期描画
             ctx.fillStyle = 'white';
             ctx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
@@ -381,9 +422,16 @@
             ctx.strokeStyle = brushColor;
             brushSizeValue.textContent = brushSize; // スライダーの初期値を表示
 
-            // UI開閉イベント
-            toggleButton.addEventListener('click', () => toggleDrawingUI(true)); // 開く
-            closeUIButton.addEventListener('click', () => toggleDrawingUI(false)); // 閉じる
+            // --- UI開閉イベントの再確認 ---
+            // イベントリスナーをここで確実に設定
+            toggleButton.addEventListener('click', () => {
+                console.log("Toggle button clicked: Opening UI");
+                toggleDrawingUI(true);
+            });
+            closeUIButton.addEventListener('click', () => {
+                console.log("Close button clicked: Closing UI");
+                toggleDrawingUI(false);
+            });
 
 
             // マウス/タッチイベントリスナーを設定
@@ -394,11 +442,15 @@
             
             drawCanvas.addEventListener('touchstart', (e) => {
                 e.preventDefault(); // スクロールを防ぐ
-                startDrawing(e.touches[0]);
+                if (e.touches.length > 0) {
+                    startDrawing(e.touches[0]);
+                }
             });
             drawCanvas.addEventListener('touchmove', (e) => {
                 e.preventDefault(); // スクロールを防ぐ
-                draw(e.touches[0]);
+                if (e.touches.length > 0) {
+                    draw(e.touches[0]);
+                }
             });
             drawCanvas.addEventListener('touchend', () => stopDrawing());
 
@@ -422,8 +474,12 @@
         function toggleDrawingUI(shouldOpen) {
             if (shouldOpen) {
                 drawingUI.classList.add('open');
+                // UIを開くときは、トグルボタンを一時的に隠す
+                toggleButton.style.display = 'none'; 
             } else {
                 drawingUI.classList.remove('open');
+                // UIを閉じるときは、トグルボタンを表示する
+                toggleButton.style.display = 'flex'; 
             }
         }
 
@@ -431,8 +487,12 @@
         // 描画開始
         function startDrawing(e) {
             isDrawing = true;
-            [lastX, lastY] = [e.offsetX || (e.clientX - drawCanvas.getBoundingClientRect().left), 
-                              e.offsetY || (e.clientY - drawCanvas.getBoundingClientRect().top)];
+            // e.offsetX / e.offsetY が存在しない場合は、getBoundingClientRectで相対位置を計算
+            const rect = drawCanvas.getBoundingClientRect();
+            const x = e.offsetX !== undefined ? e.offsetX : e.clientX - rect.left;
+            const y = e.offsetY !== undefined ? e.offsetY : e.clientY - rect.top;
+
+            [lastX, lastY] = [x, y];
             ctx.beginPath(); // 新しいパスを開始
             ctx.moveTo(lastX, lastY);
             // クリック/タップ直後の点を描画
@@ -443,12 +503,15 @@
         // 描画中
         function draw(e) {
             if (!isDrawing) return;
+            
+            const rect = drawCanvas.getBoundingClientRect();
+            const x = e.offsetX !== undefined ? e.offsetX : e.clientX - rect.left;
+            const y = e.offsetY !== undefined ? e.offsetY : e.clientY - rect.top;
+
             // 描画はstartDrawingでbeginPathされているので、ここではラインを引くだけ
-            ctx.lineTo(e.offsetX || (e.clientX - drawCanvas.getBoundingClientRect().left), 
-                       e.offsetY || (e.clientY - drawCanvas.getBoundingClientRect().top));
+            ctx.lineTo(x, y);
             ctx.stroke();
-            [lastX, lastY] = [e.offsetX || (e.clientX - drawCanvas.getBoundingClientRect().left), 
-                              e.offsetY || (e.clientY - drawCanvas.getBoundingClientRect().top)];
+            [lastX, lastY] = [x, y];
         }
 
         // 描画終了
@@ -476,7 +539,7 @@
             
             // A-Frameのコンポーネントシステムにテクスチャ変更を通知
             const material = arDrawingPlane.components.material;
-            if (material) {
+            if (material && material.map) {
                 material.map.needsUpdate = true;
             } else {
                 // 初回ロード時はまだmaterialがない可能性があるため、再設定
@@ -504,20 +567,26 @@
             const base64Image = drawCanvas.toDataURL('image/png');
 
             try {
-                // Firestoreへの保存パスを設定
+                // Firestoreへの保存パスを設定 (修正点2: グローバル関数を使用)
                 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                 // Publicデータとして保存し、全ユーザーで共有できるようにします
-                const docRef = doc(window.firebase.db, 'artifacts', appId, 'public', 'data', 'ar_drawings', 'current_drawing');
+                const docRef = window.firebase.doc(window.firebase.db, 'artifacts', appId, 'public', 'data', 'ar_drawings', 'current_drawing');
                 
-                await setDoc(docRef, {
+                await window.firebase.setDoc(docRef, {
                     base64Image: base64Image,
                     artistId: window.firebase.userId,
-                    timestamp: serverTimestamp(),
+                    timestamp: window.firebase.serverTimestamp(), // グローバル関数を使用
                     width: drawCanvas.width,
                     height: drawCanvas.height
                 });
                 
                 console.log("Drawing successfully saved to Firestore.");
+                // 成功メッセージ
+                const statusMessage = document.createElement('div');
+                statusMessage.textContent = '保存成功！AR空間に反映されました。';
+                statusMessage.style.cssText = 'position: fixed; top: 10px; right: 10px; background: #4CAF50; color: white; padding: 10px; border-radius: 5px; z-index: 1001;';
+                document.body.appendChild(statusMessage);
+                setTimeout(() => statusMessage.remove(), 4000);
             } catch (e) {
                 console.error("Error saving document: ", e);
                 // カスタムUIでエラーを表示
@@ -532,11 +601,13 @@
         // Firestoreからのデータ監視
         function startFirestoreListener() {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-            const colRef = collection(window.firebase.db, 'artifacts', appId, 'public', 'data', 'ar_drawings');
-            const docRef = doc(colRef, 'current_drawing');
+            
+            // 修正点3: グローバル関数を使用
+            const colRef = window.firebase.collection(window.firebase.db, 'artifacts', appId, 'public', 'data', 'ar_drawings');
+            const docRef = window.firebase.doc(colRef, 'current_drawing');
 
-            // リアルタイムリスナーを設定
-            onSnapshot(docRef, (docSnap) => {
+            // リアルタイムリスナーを設定 (修正点4: グローバル関数を使用)
+            window.firebase.onSnapshot(docRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
                     const base64Image = data.base64Image;
@@ -573,22 +644,14 @@
         });
 
         // AR初期化失敗時のフォールバック処理
-        // 5秒経ってもメッセージが消えない場合、手動で非表示にしてユーザーに操作させる
+        // 8秒経ってもメッセージが消えない場合、手動で非表示にしてユーザーに操作させる
         setTimeout(() => {
             if (loadingMessage.style.opacity !== '0') {
                 loadingMessage.style.opacity = '0';
                 setTimeout(() => { loadingMessage.style.display = 'none'; }, 500);
                 console.warn("AR content load event timed out. Allowing user interaction.");
-                
-                // ARが動いていないことをユーザーに知らせるUIメッセージを一時的に表示しても良い
-                /* const fallbackMessage = document.createElement('div');
-                fallbackMessage.textContent = 'AR初期化がタイムアウトしました。カメラ許可を確認してください。';
-                fallbackMessage.style.cssText = 'position: fixed; top: 10px; left: 50%; transform: translateX(-50%); background: #FFC107; color: #333; padding: 10px; border-radius: 5px; z-index: 1001;';
-                document.body.appendChild(fallbackMessage);
-                setTimeout(() => fallbackMessage.remove(), 5000);
-                */
             }
-        }, 8000); // 8秒のタイムアウト
+        }, 8000); 
 
         // アプリケーション全体のエントリーポイント
         window.initApp = function() {
@@ -600,8 +663,10 @@
         }
 
         // Firebaseの認証準備が整うまで待つ（上記type="module"スクリプト内でコールされる）
-        if (authReady) {
-            window.initApp();
+        // NOTE: Firebaseの認証後にinitApp()が呼ばれることを前提とする
+        if (typeof window.firebase !== 'undefined' && window.firebase.db) {
+             // すでに認証が完了している場合は即座に実行 (念のため)
+             window.initApp();
         }
     </script>
     
