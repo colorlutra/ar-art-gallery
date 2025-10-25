@@ -131,6 +131,8 @@
             /* 最大幅をコンテナサイズに合わせる */
             max-width: calc(100% - 20px); 
             height: auto; 
+            /* キャンバスの幅に合わせるためにblock要素にする */
+            display: block; 
             border: 2px solid #555;
             border-radius: 8px;
             background-color: white;
@@ -438,8 +440,8 @@
             // Mouse events
             drawCanvas.addEventListener('mousedown', (e) => startDrawing(e));
             drawCanvas.addEventListener('mousemove', (e) => draw(e));
-            drawCanvas.addEventListener('mouseup', () => stopDrawing());
-            drawCanvas.addEventListener('mouseout', () => stopDrawing());
+            document.addEventListener('mouseup', () => stopDrawing()); // キャンバス外で指を離しても描画を止める
+            drawCanvas.addEventListener('mouseout', () => { /* 描画中なら何もしない */ }); // mouseoutで描画を止めない
             
             // Touch events
             drawCanvas.addEventListener('touchstart', (e) => {
@@ -454,8 +456,8 @@
                     draw(e.touches[0]); // TouchListから最初のTouchオブジェクトを渡す
                 }
             });
-            drawCanvas.addEventListener('touchend', () => stopDrawing());
-            drawCanvas.addEventListener('touchcancel', () => stopDrawing());
+            document.addEventListener('touchend', () => stopDrawing()); // 画面外で指を離しても描画を止める
+            document.addEventListener('touchcancel', () => stopDrawing()); // 画面外で指を離しても描画を止める
 
 
             clearButton.addEventListener('click', clearCanvas);
@@ -499,29 +501,28 @@
 
             let clientX, clientY;
 
-            // eがMouseEventの場合
+            // eがMouseEventの場合: offsetX/Yを使う (キャンバス左上からのオフセット)
             if (e.offsetX !== undefined) {
                 clientX = e.offsetX;
                 clientY = e.offsetY;
             } 
-            // eがTouchObjectの場合
+            // eがTouchObjectの場合: clientX/Yを使い、キャンバス左上からの相対位置を計算
             else if (e.clientX !== undefined) {
-                // clientX/Yはビューポートに対する位置なので、offsetに変換する
+                // 絶対座標からキャンバスの左上の座標を引いて相対座標を求める
                 clientX = e.clientX - rect.left;
                 clientY = e.clientY - rect.top;
             } else {
                 return; // 有効な座標がない場合は終了
             }
 
+            // 実際のキャンバス座標にスケーリング
             const x = clientX * scaleX;
             const y = clientY * scaleY;
 
             [lastX, lastY] = [x, y];
+            
             ctx.beginPath(); // 新しいパスを開始
             ctx.moveTo(lastX, lastY);
-            // クリック/タップ直後の点を描画
-            ctx.lineTo(lastX + 0.001, lastY); // わずかに動かして点を描画
-            ctx.stroke();
         }
 
         // 描画中
@@ -529,7 +530,7 @@
             if (!isDrawing) return;
             
             const rect = drawCanvas.getBoundingClientRect();
-            // キャンバスの表示サイズと内部サイズの違いを考慮して座標をスケーリング
+            
             const scaleX = drawCanvas.width / rect.width;
             const scaleY = drawCanvas.height / rect.height;
 
@@ -542,19 +543,21 @@
             } 
             // eがTouchObjectの場合
             else if (e.clientX !== undefined) {
-                // clientX/Yはビューポートに対する位置なので、offsetに変換する
                 clientX = e.clientX - rect.left;
                 clientY = e.clientY - rect.top;
             } else {
-                return; // 有効な座標がない場合は終了
+                return; 
             }
 
+            // 実際のキャンバス座標にスケーリング
             const x = clientX * scaleX;
             const y = clientY * scaleY;
 
             // 描画はstartDrawingでbeginPathされているので、ここではラインを引くだけ
             ctx.lineTo(x, y);
             ctx.stroke();
+            
+            // 次の描画のために座標を更新
             [lastX, lastY] = [x, y];
         }
 
@@ -563,6 +566,7 @@
             if (!isDrawing) return;
             isDrawing = false;
             ctx.closePath();
+            // 線が確定したら、パスを閉じる
         }
 
         // キャンバスを白でクリア
