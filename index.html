@@ -55,7 +55,9 @@
 
 <a-scene
     embedded
-    arjs='sourceType: webcam; detectionMode: mono; cameraParametersUrl: data/camera_para.dat;'
+    
+    arjs='sourceType: webcam; detectionMode: mono;'
+    
     vr-mode-ui="enabled: false">
 
     <a-entity position="0 0 -3">
@@ -74,16 +76,107 @@
     let lastX = 0;
     let lastY = 0;
     
-    // キャンバスを画面サイズに合わせる & 設定を初期化
     function resizeCanvas() {
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         
-        // リサイズ時に描画設定を再設定
         ctx.strokeStyle = '#FF0000'; // 赤
         ctx.lineWidth = 10;
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
-        // !!! 描画線の即時消去を防ぐために、リサイズ時にクリア !!!
-        ctx.clearRect(0,
+        ctx.clearRect(0, 0, canvas.width, canvas.height); 
+    }
+    
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas(); // 初期設定
+
+    function draw(e) {
+        if (!isDrawing) return;
+
+        const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+        const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+        
+        e.preventDefault(); 
+
+        ctx.beginPath();
+        ctx.moveTo(lastX, lastY);
+        ctx.lineTo(clientX, clientY);
+        ctx.stroke();
+        [lastX, lastY] = [clientX, clientY];
+    }
+
+    // イベントリスナーの設定
+    ['mousedown', 'touchstart'].forEach(eventName => {
+        canvas.addEventListener(eventName, (e) => {
+            isDrawing = true;
+            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+            [lastX, lastY] = [clientX, clientY];
+            draw(e); 
+        }, { passive: false });
+    });
+
+    ['mousemove', 'touchmove'].forEach(eventName => {
+        canvas.addEventListener(eventName, draw, { passive: false });
+    });
+
+    ['mouseup', 'touchend', 'mouseout'].forEach(eventName => {
+        canvas.addEventListener(eventName, () => isDrawing = false, false);
+    });
+
+    // --- ARへの反映ロジック ---
+
+    const drawingPlane = document.getElementById('drawingPlane');
+    let texture = null; 
+
+    function applyDrawing() {
+        canvas.style.backgroundColor = 'transparent';
+
+        const aspectRatio = canvas.height / canvas.width;
+        const planeWidth = 2; 
+        const planeHeight = planeWidth * aspectRatio;
+
+        // AR空間のプレーンのサイズを更新
+        drawingPlane.setAttribute('width', planeWidth);
+        drawingPlane.setAttribute('height', planeHeight);
+        
+        drawingPlane.setAttribute('position', `0 0 -3`); 
+
+        if (texture) {
+            texture.dispose();
+        }
+
+        // THREE.jsのCanvasTextureを作成
+        texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        texture.needsUpdate = true;
+
+        // プレーンの材質を取得し、テクスチャを適用
+        const material = drawingPlane.getObject3D('mesh').material;
+        material.map = texture;
+        material.needsUpdate = true;
+
+        // 描画キャンバスとコントロールを非表示
+        canvas.style.zIndex = -1;
+        document.getElementById('controls').style.display = 'none';
+
+        alert('AR空間に絵が反映されました！スマホを動かして見てね。');
+    }
+
+    function resetDrawingMode() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height); 
+        canvas.style.zIndex = 10; 
+        canvas.style.backgroundColor = 'rgba(0, 0, 0, 0.3)';
+        document.getElementById('controls').style.display = 'flex';
+        
+        alert('新しい絵を描いてください。AR空間の前の絵はそのまま残っています。');
+    }
+    
+    // コントロールボタンにロジックを割り当て
+    document.getElementById('applyButton').onclick = applyDrawing;
+    document.getElementById('resetButton').onclick = resetDrawingMode;
+
+</script>
+</body>
+</html>
