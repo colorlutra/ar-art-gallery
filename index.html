@@ -16,10 +16,7 @@
         // 必要なFirestore関数を全てインポート
         import { getFirestore, doc, setDoc, onSnapshot, collection, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
-        // Firestoreログレベル設定 (デバッグ用)
-        // setLogLevel('debug');
-
-        // グローバル変数としてFirebaseインスタンスと関数を保持 (修正点1: グローバル化)
+        // グローバル変数としてFirebaseインスタンスと関数を保持
         window.firebase = {};
         window.firebase.doc = doc;
         window.firebase.setDoc = setDoc;
@@ -102,8 +99,8 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            /* 描画UIの最大幅を設定し、中央に配置 */
-            max-width: 600px; 
+            /* 修正点1: 描画UIの最大幅を750pxに拡大 */
+            max-width: 750px; 
             margin: 0 auto;
             right: 0; /* max-widthと併用して中央寄せ */
             
@@ -114,7 +111,7 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            /* UIを画面外に隠す設定 */
+            /* UIを画面外に隠す設定 (初期状態) */
             transform: translateY(100%);
             transition: transform 0.3s ease-out; /* スムーズなアニメーション */
             border-top-left-radius: 15px;
@@ -127,7 +124,7 @@
         }
 
 
-        /* 描画キャンバスのスタイル調整: 幅を広く */
+        /* 描画キャンバスのスタイル調整 */
         #draw-canvas {
             touch-action: none; /* タッチイベントの競合を防ぐ */
             /* 最大幅をコンテナサイズに合わせる */
@@ -161,8 +158,8 @@
             border-right: 1px solid #444;
         }
         
-        /* モバイルでの調整 */
-        @media (max-width: 600px) {
+        /* 修正点2: モバイルでの調整ブレークポイントを750pxに合わせる */
+        @media (max-width: 750px) { 
             .controls {
                 flex-direction: column;
             }
@@ -360,8 +357,8 @@
         <!-- --- 閉じるボタン --- -->
         <button id="close-ui-button" title="閉じる">✕</button>
 
-        <!-- キャンバスのサイズを500x300に拡大 -->
-        <canvas id="draw-canvas" width="500" height="300"></canvas> 
+        <!-- キャンバスのサイズは600x400を維持 -->
+        <canvas id="draw-canvas" width="600" height="400"></canvas> 
         <div class="controls">
             <!-- 描画オプション（色とサイズ）を追加 -->
             <div class="drawing-options">
@@ -383,7 +380,6 @@
     <script>
         // 描画関連のDOM要素
         const drawCanvas = document.getElementById('draw-canvas');
-        // NOTE: Canvasの初期化はinitAppで行うため、ここではgetContextは行わない
         const saveButton = document.getElementById('save-button');
         const clearButton = document.getElementById('clear-button');
         // 追加したコントロール
@@ -408,6 +404,14 @@
         let brushColor = colorPicker.value;
         let brushSize = parseInt(brushSizeSlider.value, 10);
 
+        // UIトグルボタンのリスナーを即座にアタッチ
+        if (toggleButton) {
+            toggleButton.addEventListener('click', () => {
+                console.log("Toggle button clicked: Opening UI");
+                toggleDrawingUI(true);
+            });
+        }
+
         // 初期化処理
         function setupDrawing() {
             // ここでコンテキストを取得
@@ -415,24 +419,21 @@
             
             // 初期描画
             ctx.fillStyle = 'white';
-            ctx.fillRect(0, 0, drawCanvas.width, drawCanvas.height);
+            // 描画キャンバスの幅と高さはHTMLタグで設定した600x400を使用
+            ctx.fillRect(0, 0, drawCanvas.width, drawCanvas.height); 
             ctx.lineJoin = 'round';
             ctx.lineCap = 'round';
             ctx.lineWidth = brushSize;
             ctx.strokeStyle = brushColor;
             brushSizeValue.textContent = brushSize; // スライダーの初期値を表示
 
-            // --- UI開閉イベントの再確認 ---
-            // イベントリスナーをここで確実に設定
-            toggleButton.addEventListener('click', () => {
-                console.log("Toggle button clicked: Opening UI");
-                toggleDrawingUI(true);
-            });
-            closeUIButton.addEventListener('click', () => {
-                console.log("Close button clicked: Closing UI");
-                toggleDrawingUI(false);
-            });
-
+            // --- 閉じるボタンのリスナーをここで設定 ---
+            if (closeUIButton) {
+                closeUIButton.addEventListener('click', () => {
+                    console.log("Close button clicked: Closing UI");
+                    toggleDrawingUI(false);
+                });
+            }
 
             // マウス/タッチイベントリスナーを設定
             drawCanvas.addEventListener('mousedown', (e) => startDrawing(e));
@@ -489,8 +490,12 @@
             isDrawing = true;
             // e.offsetX / e.offsetY が存在しない場合は、getBoundingClientRectで相対位置を計算
             const rect = drawCanvas.getBoundingClientRect();
-            const x = e.offsetX !== undefined ? e.offsetX : e.clientX - rect.left;
-            const y = e.offsetY !== undefined ? e.offsetY : e.clientY - rect.top;
+            // キャンバスの表示サイズと内部サイズの違いを考慮して座標をスケーリング
+            const scaleX = drawCanvas.width / rect.width;
+            const scaleY = drawCanvas.height / rect.height;
+
+            const x = (e.offsetX !== undefined ? e.offsetX : e.clientX - rect.left) * scaleX;
+            const y = (e.offsetY !== undefined ? e.offsetY : e.clientY - rect.top) * scaleY;
 
             [lastX, lastY] = [x, y];
             ctx.beginPath(); // 新しいパスを開始
@@ -505,8 +510,12 @@
             if (!isDrawing) return;
             
             const rect = drawCanvas.getBoundingClientRect();
-            const x = e.offsetX !== undefined ? e.offsetX : e.clientX - rect.left;
-            const y = e.offsetY !== undefined ? e.offsetY : e.clientY - rect.top;
+            // キャンバスの表示サイズと内部サイズの違いを考慮して座標をスケーリング
+            const scaleX = drawCanvas.width / rect.width;
+            const scaleY = drawCanvas.height / rect.height;
+
+            const x = (e.offsetX !== undefined ? e.offsetX : e.clientX - rect.left) * scaleX;
+            const y = (e.offsetY !== undefined ? e.offsetY : e.clientY - rect.top) * scaleY;
 
             // 描画はstartDrawingでbeginPathされているので、ここではラインを引くだけ
             ctx.lineTo(x, y);
@@ -567,7 +576,7 @@
             const base64Image = drawCanvas.toDataURL('image/png');
 
             try {
-                // Firestoreへの保存パスを設定 (修正点2: グローバル関数を使用)
+                // Firestoreへの保存パスを設定
                 const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
                 // Publicデータとして保存し、全ユーザーで共有できるようにします
                 const docRef = window.firebase.doc(window.firebase.db, 'artifacts', appId, 'public', 'data', 'ar_drawings', 'current_drawing');
@@ -602,11 +611,11 @@
         function startFirestoreListener() {
             const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
             
-            // 修正点3: グローバル関数を使用
+            // グローバル関数を使用
             const colRef = window.firebase.collection(window.firebase.db, 'artifacts', appId, 'public', 'data', 'ar_drawings');
             const docRef = window.firebase.doc(colRef, 'current_drawing');
 
-            // リアルタイムリスナーを設定 (修正点4: グローバル関数を使用)
+            // リアルタイムリスナーを設定 (グローバル関数を使用)
             window.firebase.onSnapshot(docRef, (docSnap) => {
                 if (docSnap.exists()) {
                     const data = docSnap.data();
