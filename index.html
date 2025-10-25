@@ -99,8 +99,8 @@
             bottom: 0;
             left: 0;
             width: 100%;
-            /* 修正点1: 描画UIの最大幅を750pxに拡大 */
-            max-width: 750px; 
+            /* 修正点1: 描画UIの最大幅を900pxに拡大 */
+            max-width: 900px; 
             margin: 0 auto;
             right: 0; /* max-widthと併用して中央寄せ */
             
@@ -158,8 +158,8 @@
             border-right: 1px solid #444;
         }
         
-        /* 修正点2: モバイルでの調整ブレークポイントを750pxに合わせる */
-        @media (max-width: 750px) { 
+        /* 修正点2: モバイルでの調整ブレークポイントを900pxに合わせる */
+        @media (max-width: 900px) { 
             .controls {
                 flex-direction: column;
             }
@@ -357,8 +357,8 @@
         <!-- --- 閉じるボタン --- -->
         <button id="close-ui-button" title="閉じる">✕</button>
 
-        <!-- キャンバスのサイズは600x400を維持 -->
-        <canvas id="draw-canvas" width="600" height="400"></canvas> 
+        <!-- 修正点3: キャンバスのサイズを800x500に拡大 -->
+        <canvas id="draw-canvas" width="800" height="500"></canvas> 
         <div class="controls">
             <!-- 描画オプション（色とサイズ）を追加 -->
             <div class="drawing-options">
@@ -419,7 +419,7 @@
             
             // 初期描画
             ctx.fillStyle = 'white';
-            // 描画キャンバスの幅と高さはHTMLタグで設定した600x400を使用
+            // 描画キャンバスの幅と高さはHTMLタグで設定した800x500を使用
             ctx.fillRect(0, 0, drawCanvas.width, drawCanvas.height); 
             ctx.lineJoin = 'round';
             ctx.lineCap = 'round';
@@ -628,6 +628,7 @@
                         const tempImg = new Image();
                         tempImg.onload = () => {
                             // 受信した画像をローカルの描画キャンバスに反映
+                            // NOTE: 受信したデータが現在のキャンバスサイズと異なっても、fitさせる
                             ctx.drawImage(tempImg, 0, 0, drawCanvas.width, drawCanvas.height);
                             // ARテクスチャも更新
                             updateARTexture(); 
