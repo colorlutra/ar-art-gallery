@@ -13,9 +13,21 @@
     
     <!-- Tailwind CSS (デザイン強化用) -->
     <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      // Tailwindのカスタム設定 (フォント設定を含む)
+      tailwind.config = {
+        theme: {
+          extend: {
+            fontFamily: {
+              sans: ['Inter', 'sans-serif'],
+            },
+          },
+        },
+      }
+    </script>
 
     <style>
-      body { margin: 0; overflow: hidden; font-family: sans-serif; }
+      body { margin: 0; overflow: hidden; font-family: 'Inter', sans-serif; }
 
       /* ARシーンは最背面に */
       a-scene {
@@ -32,21 +44,22 @@
         right: 0;
         z-index: 10; /* ARシーンよりも手前に */
         background-color: rgba(0, 0, 0, 0.9);
-        padding: 10px;
+        padding: 16px;
         box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.7);
         display: flex;
         flex-direction: column;
-        gap: 12px;
+        gap: 16px; /* ギャップを少し広げ、タッチしやすく */
+        backdrop-filter: blur(5px);
       }
       
       /* 描画キャンバス (ユーザーが実際に操作するキャンバス) */
       #ui-drawing-canvas {
         background-color: #1a1a1a;
         border: 2px solid #6f42c1; /* 紫の枠 */
-        border-radius: 8px;
+        border-radius: 12px; /* 角を丸く */
         touch-action: none; /* ドローイング中にページスクロールを防止 */
         width: 100%;
-        height: 150px; /* 描画しやすいよう高さを固定 */
+        height: 180px; /* 描画しやすいよう高さを確保 */
       }
       
       /* 全てのコントロールグループ */
@@ -65,19 +78,19 @@
           border-radius: 50%;
           border: 3px solid white;
           cursor: pointer;
-          min-width: 40px; /* 最小幅を確保 */
+          min-width: 40px;
       }
       
       /* パレットボタンのスタイル */
       .palette-button {
-          width: 32px;
-          height: 32px;
+          width: 36px; /* サイズを微増 */
+          height: 36px;
           border-radius: 50%;
           border: 3px solid transparent;
           cursor: pointer;
           transition: border-color 0.1s, box-shadow 0.1s;
           box-shadow: 0 1px 4px rgba(0, 0, 0, 0.5);
-          min-width: 32px; /* 最小幅を確保 */
+          min-width: 36px;
       }
 
       /* 選択中のパレットボタンのスタイル */
@@ -96,9 +109,13 @@
         transition: background-color 0.2s, transform 0.1s;
         box-shadow: 0 3px 6px rgba(0, 0, 0, 0.3);
         min-width: 80px;
+        transform: translateZ(0); /* クリック時のズレ防止 */
+      }
+      .action-button:active {
+        transform: scale(0.98);
       }
       
-      /* --- 追加: カメラアクセス誘導用のオーバーレイ --- */
+      /* --- カメラアクセス誘導用のオーバーレイ --- */
       #ar-status-overlay {
         position: fixed;
         top: 0;
@@ -119,26 +136,26 @@
         pointer-events: auto; /* クリックを受け付ける */
       }
       
-      /* ARシーンがロードされたら非表示にする */
-      .ar-loaded #ar-status-overlay {
-          opacity: 0;
-          pointer-events: none; /* クリックを透過させる */
+      /* ARシーンロード後、JSで非表示にする */
+      .hidden-overlay {
+          opacity: 0 !important;
+          pointer-events: none !important;
       }
     </style>
   </head>
   <body>
-    <!-- カメラアクセス誘導オーバーレイ (画面が真っ白な問題に対応) -->
+    <!-- カメラアクセス誘導オーバーレイ -->
     <div id="ar-status-overlay" class="space-y-6">
-        <h1 class="text-3xl font-bold mb-4 text-purple-400">AR共同キャンバスを起動中...</h1>
-        <div class="p-6 bg-gray-800 rounded-xl shadow-lg w-11/12 max-w-sm space-y-3">
-            <p class="mb-2 text-lg font-semibold">【重要】カメラ許可のお願い</p>
-            <p class="text-sm text-gray-300">1. ブラウザに表示される「カメラの使用許可」ダイアログで**必ず許可**をタップしてください。</p>
-            <p class="text-sm text-gray-300">2. **この画面が消えない場合**は、ブラウザの設定でカメラアクセスがブロックされていないか確認してください。（特にiOS/Safari）</p>
-        </div>
-        <p class="text-sm text-gray-500">（許可後、ARシーンが表示されれば、この画面は自動で消えます）</p>
+      <h1 class="text-3xl font-bold mb-4 text-purple-400">AR共同キャンバスを起動中...</h1>
+      <div class="p-6 bg-gray-800 rounded-xl shadow-lg w-11/12 max-w-sm space-y-3">
+        <p class="mb-2 text-xl font-bold text-yellow-300">AR起動手順</p>
+        <p class="text-sm text-gray-300">1. ブラウザに表示される「カメラの使用許可」ダイアログで**必ず許可**をタップしてください。</p>
+        <p class="text-sm text-gray-300">2. 許可後、ARシーンが表示されれば、この画面は自動で消えます。</p>
+        <p class="text-sm text-gray-300 font-semibold mt-4">👉 この画面が消えたら、下の黒いキャンバスに自由に描画できます。</p>
+      </div>
     </div>
 
-    <!-- A-Frame assetsにテクスチャ用キャンバスを定義 (これは描画されず、データ保持のみ) -->
+    <!-- A-Frame assetsにテクスチャ用キャンバスを定義 (データ保持のみ) -->
     <a-assets>
         <canvas id="texture-canvas" width="512" height="512"></canvas> 
     </a-assets>
@@ -153,9 +170,10 @@
       
       <!-- 共同キャンバスの3D投影 -->
       <!-- AR空間でのキャンバスのテクスチャソースとしてtexture-canvasを指定 -->
+      <!-- 初期配置は目の前3m、床から1.5mの高さ -->
       <a-plane id="ar-canvas-plane"
         material="src: #texture-canvas; transparent: true; side: double;"
-        position="0 1.5 -3.0"  <!-- 3D空間の地面から1.5mの高さ、3m先に配置 -->
+        position="0 1.5 -3.0" 
         rotation="0 0 0"
         width="3.0" height="3.0"> <!-- 3メートル四方の大きなキャンバス -->
       </a-plane>
@@ -183,14 +201,14 @@
             <div class="control-group justify-between">
                 <!-- 線幅設定 -->
                 <div class="flex items-center">
-                    <span class="text-white text-sm whitespace-nowrap">線幅:</span>
-                    <input type="range" id="line-width-input" min="5" max="50" value="15" class="ml-2 w-20 sm:w-32">
+                    <span class="text-white text-sm whitespace-nowrap font-semibold">線幅:</span>
+                    <input type="range" id="line-width-input" min="5" max="50" value="15" class="ml-2 w-20 sm:w-32 accent-purple-500">
                 </div>
-            
+                
                 <!-- アクションボタンズ -->
                 <div class="control-group justify-end flex-grow">
                     <button id="clear-button" class="action-button bg-red-600 text-white hover:bg-red-700">🗑️ クリア</button>
-                    <button id="save-button" class="action-button bg-blue-600 text-white hover:bg-blue-700">🎨 AR空間に保存</button>
+                    <button id="save-button" class="action-button bg-purple-600 text-white hover:bg-purple-700">💾 AR空間に保存</button>
                 </div>
             </div>
         </div>
@@ -199,10 +217,10 @@
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
         import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
-        import { getFirestore, doc, setDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
-        import { setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, onSnapshot, serverTimestamp, setLogLevel } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
         
         // --- 1. Firebase初期化 ---
+        // 環境変数からアプリIDと設定を取得
         const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-ar-app';
         const firebaseConfig = JSON.parse(typeof __firebase_config !== 'undefined' ? __firebase_config : '{}');
         const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null;
@@ -214,12 +232,12 @@
             db = getFirestore(app);
             auth = getAuth(app);
             setLogLevel('Debug');
-            window.db = db;
-            window.auth = auth;
+            console.log("Firebase services initialized.");
         } catch (e) {
             console.error("Firebase configuration is invalid or missing:", e);
         }
 
+        // 共同アートワークが保存されるFirestoreのパブリックパス
         const ARTWORK_DOC_PATH = `/artifacts/${appId}/public/data/sharedCanvas/mainArtwork`;
         
         // --- 2. 認証処理 ---
@@ -234,9 +252,9 @@
                 } else {
                     await signInAnonymously(auth);
                 }
-                console.log("Firebase Authentication successful.");
+                console.log(`Firebase Authentication successful. User ID: ${auth.currentUser?.uid}`);
             } catch (error) {
-                console.error("Firebase Authentication error:", error);
+                console.error("Firebase Authentication failed:", error);
                 // 失敗した場合でも匿名サインインを試みる（安全策）
                 try {
                     await signInAnonymously(auth);
@@ -252,10 +270,8 @@
          */
         function forceArTextureUpdate() {
             const arPlane = document.getElementById('ar-canvas-plane');
-            // AR Plane要素、そのコンポーネント、マテリアルが存在するか確認
             if (arPlane && arPlane.components.material && arPlane.components.material.material) {
                 const material = arPlane.components.material.material;
-                // Three.jsのテクスチャオブジェクトを取得し、更新フラグを立てる
                 if (material.map) {
                     material.map.needsUpdate = true;
                     // console.log("AR Texture forced update.");
@@ -267,7 +283,7 @@
         // --- 3. 描画データのロード/リアルタイム更新 ---
         function setupRealtimeListener(uiCanvas, textureCtx) {
             if (!db) {
-                console.error("Firestore not initialized.");
+                console.error("Firestore not initialized. Cannot set up listener.");
                 return;
             }
             
@@ -295,10 +311,12 @@
 
                             console.log("Realtime artwork updated from Firestore.");
                         };
+                        // データURLをセット
                         img.src = base64Image;
                     }
                 } else {
                     console.log("No shared artwork found. Starting new canvas.");
+                    // データが存在しない場合、両方のキャンバスをクリア
                     uiCanvas.getContext('2d').clearRect(0, 0, uiCanvas.width, uiCanvas.height);
                     textureCtx.clearRect(0, 0, textureCtx.canvas.width, textureCtx.canvas.height);
                     forceArTextureUpdate(); 
@@ -310,17 +328,16 @@
         
         // --- 4. 描画データの保存 ---
         window.saveArtwork = async (canvas) => {
-            const userId = auth?.currentUser?.uid || 'anonymous';
+            // ユーザーIDの取得 (未認証の場合はUUIDを生成)
+            const userId = auth?.currentUser?.uid || (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : 'anonymous-fallback');
             const base64Image = canvas.toDataURL('image/png');
             
-            if (!db || !userId) {
-                console.error("Cannot save: Firestore or User ID is missing.");
+            if (!db) {
+                console.error("Cannot save: Firestore is not initialized.");
                 return;
             }
 
             const saveButton = document.getElementById('save-button');
-            
-            // ボタンが存在しない場合のガード
             if (!saveButton) return; 
 
             saveButton.textContent = '保存中...';
@@ -341,7 +358,7 @@
                 saveButton.textContent = '保存エラー';
             } finally {
                 setTimeout(() => {
-                    saveButton.textContent = '🎨 AR空間に保存';
+                    saveButton.textContent = '💾 AR空間に保存';
                     saveButton.disabled = false;
                 }, 2000);
             }
@@ -356,7 +373,7 @@
             const arStatusOverlay = document.getElementById('ar-status-overlay');
 
             if (!uiCanvas || !textureCanvas) {
-                console.error("致命的なエラー: UIキャンバスまたはテクスチャキャンバス要素がDOMに見つかりませんでした。");
+                console.error("致命的なエラー: キャンバス要素がDOMに見つかりませんでした。");
                 return;
             }
 
@@ -388,8 +405,9 @@
                     button.style.backgroundColor = color;
                     button.dataset.color = color;
                     
-                    if (color === colorPicker.value) {
-                         button.classList.add('selected');
+                    // 初期選択状態を設定
+                    if (color.toUpperCase() === colorPicker.value.toUpperCase()) {
+                        button.classList.add('selected');
                     }
 
                     button.addEventListener('click', () => {
@@ -410,20 +428,14 @@
                 setupRealtimeListener(uiCanvas, textureCtx);
             });
 
-            // --- AR Scene Loaded Check (画面が真っ白な問題に対応) ---
+            // --- AR Scene Loaded Check (カメラ安定化のためのオーバーレイ処理) ---
             const aScene = document.querySelector('a-scene');
             if (aScene && arStatusOverlay) {
-                // A-Frameのloadedイベントをリッスンし、ARシーンが起動したらオーバーレイを非表示にする
+                // A-Frameのloadedイベントはカメラの権限が与えられ、シーンが初期化された時に発火する
                 aScene.addEventListener('loaded', () => {
-                    // ARシーンが完全にロードされても、カメラが起動していない可能性があるため、
-                    // ユーザーがキャンバスを操作できるように、まずはオーバーレイを薄くします。
-                    arStatusOverlay.style.opacity = '0.1';
-                    
-                    // AR.jsがカメラ映像を配置し、シーンが描画された後に完全に非表示にする
-                    // AR.jsの内部的なカメラ初期化を待つために少し遅延させる
-                    setTimeout(() => {
-                        document.body.classList.add('ar-loaded');
-                    }, 3000); 
+                    console.log("A-Frame scene loaded. Hiding overlay.");
+                    // オーバーレイを非表示にする (CSSのopacityとpointer-eventsを変更)
+                    arStatusOverlay.classList.add('hidden-overlay');
                 });
             }
 
@@ -432,7 +444,7 @@
             let lastX = 0;
             let lastY = 0;
 
-            // 初期設定 (ctxの取得が成功しているため安全)
+            // 初期設定
             uiCtx.lineCap = 'round';
             uiCtx.lineJoin = 'round';
             
@@ -448,13 +460,11 @@
 
             // 描画イベント開始
             function startDrawing(e) {
-                // イベントオブジェクトがない場合は処理を中断
                 if (!e) return; 
                 e.preventDefault();
                 
                 const [coordsX, coordsY] = getCoordinates(e);
 
-                // ★修正：有効な座標が取得できない場合は描画をスタートしない
                 if (isNaN(coordsX) || isNaN(coordsY)) {
                     isDrawing = false;
                     return; 
@@ -462,8 +472,8 @@
 
                 isDrawing = true;
                 [lastX, lastY] = [coordsX, coordsY];
-                // 描画開始時にも点を打てるようにする
-                draw(e, true);
+                // 描画開始時にも点を打てるようにする (isSinglePoint = true)
+                draw(e, true); 
             }
 
             // 描画処理
@@ -476,10 +486,10 @@
                     
                     const [currentX, currentY] = getCoordinates(e);
 
-                    // ★修正：座標がNaNの場合、不完全なイベントなので描画を中断
+                    // 座標がNaNの場合、不完全なイベントなので描画を中断
                     if (isNaN(currentX) || isNaN(currentY)) return; 
 
-                    // 座標が取得できなかった場合は描画しない (isSinglePointでない場合)
+                    // 座標が同じ場合は描画しない (isSinglePointでない場合)
                     if (currentX === lastX && currentY === lastY && !isSinglePoint) return;
                     
                     const color = colorPicker ? colorPicker.value : '#FFFFFF';
@@ -494,7 +504,7 @@
                     uiCtx.lineTo(currentX, currentY);
                     uiCtx.stroke();
                     
-                    // テクスチャキャンバスにも描画を反映
+                    // テクスチャキャンバスにも描画を反映 (AR空間用)
                     textureCtx.strokeStyle = color;
                     textureCtx.lineWidth = width;
                     textureCtx.beginPath();
@@ -504,10 +514,9 @@
 
                     [lastX, lastY] = [currentX, currentY];
                     
-                    // AR Texture Update
+                    // AR Texture Updateを強制
                     forceArTextureUpdate();
                 } catch (error) {
-                    // エラーが発生したら、consoleに出力し、isDrawingフラグをfalseにしてグローバルエラーを防ぐ
                     console.error("Drawing error caught and contained:", error);
                     isDrawing = false;
                 }
@@ -523,18 +532,19 @@
                 let clientX, clientY;
                 
                 if (e.touches && e.touches.length > 0) {
+                    // タッチイベント
                     clientX = e.touches[0].clientX;
                     clientY = e.touches[0].clientY;
                 } else if (e.clientX !== undefined) {
+                    // マウスイベント
                     clientX = e.clientX;
                     clientY = e.clientY;
                 } else {
-                    // イベントから座標を取得できなかった場合は、描画を中断させるため[NaN, NaN]を返す
-                    return [NaN, NaN]; 
+                    return [NaN, NaN]; // 座標を取得できなかった場合
                 }
                 
-                // ★修正：clientX/Yが有効な数値であるか最終チェック (モバイルでのNaN発生防止)
-                if (typeof clientX !== 'number' || typeof clientY !== 'number') {
+                // clientX/Yが有効な数値であるか最終チェック
+                if (typeof clientX !== 'number' || typeof clientY !== 'number' || isNaN(clientX) || isNaN(clientY)) {
                     return [NaN, NaN];
                 }
                 
@@ -556,16 +566,25 @@
             uiCanvas.addEventListener('mouseup', stopDrawing);
             uiCanvas.addEventListener('mouseout', stopDrawing);
 
-            uiCanvas.addEventListener('touchstart', startDrawing);
-            uiCanvas.addEventListener('touchmove', draw);
+            uiCanvas.addEventListener('touchstart', startDrawing, { passive: false }); // passive: false でpreventDefaultを有効化
+            uiCanvas.addEventListener('touchmove', draw, { passive: false });
             uiCanvas.addEventListener('touchend', stopDrawing);
+            // touchcancelは念のため追加
+            uiCanvas.addEventListener('touchcancel', stopDrawing); 
 
             // コントロール変更リスナー
             if (colorPicker) {
                 colorPicker.addEventListener('input', (e) => {
                     uiCtx.strokeStyle = e.target.value;
                     // パレットボタンの選択状態を解除
-                    document.querySelectorAll('.palette-button').forEach(btn => btn.classList.remove('selected'));
+                    document.querySelectorAll('.palette-button').forEach(btn => {
+                        // カラーピッカーの値がパレットの色と一致する場合のみ選択状態にする
+                        if (btn.dataset.color.toUpperCase() === e.target.value.toUpperCase()) {
+                             btn.classList.add('selected');
+                        } else {
+                            btn.classList.remove('selected');
+                        }
+                    });
                 });
             }
             
