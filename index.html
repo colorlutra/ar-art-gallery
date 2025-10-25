@@ -15,9 +15,8 @@
             position: fixed;
             top: 0;
             left: 0;
-            z-index: 10; /* AR映像の上に表示 */
-            touch-action: none; /* ドローイング中にページスクロール・ズームを防止 (重要) */
-            /* 背景を黒に変更し、線の色が分かりやすいようにします */
+            z-index: 10;
+            touch-action: none; 
             background-color: rgba(0, 0, 0, 0.5); 
         }
         #controls {
@@ -56,7 +55,6 @@
 
 <a-scene
     embedded
-    /* cameraParametersUrl を削除し、デフォルト設定を使用 */
     arjs='sourceType: webcam; detectionMode: mono;'
     vr-mode-ui="enabled: false">
 
@@ -80,9 +78,8 @@
         canvas.width = window.innerWidth;
         canvas.height = window.innerHeight;
         
-        // 線の色を白に変更（デフォルトのキャンバス背景が黒のため見やすい）
         ctx.strokeStyle = '#FFFFFF'; 
-        ctx.lineWidth = 15; // 線幅を少し太くしました
+        ctx.lineWidth = 15; 
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
@@ -90,59 +87,73 @@
     }
     
     window.addEventListener('resize', resizeCanvas);
-    resizeCanvas(); // 初期設定
+    resizeCanvas(); 
 
-    function draw(e) {
-        if (!isDrawing) return;
-
-        // ブラウザのスクロール・ズームをキャンセル (最重要)
+    // ★ 修正1: 描画開始 (mousedown/touchstart)
+    function startDrawing(e) {
+        isDrawing = true;
         e.preventDefault(); 
         
-        // タッチまたはマウスイベントから座標を取得
         const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
         const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
 
-        // 描画
-        ctx.beginPath();
-        ctx.moveTo(lastX, lastY);
-        ctx.lineTo(clientX, clientY);
-        ctx.stroke();
+        // 新しいパスを開始し、最初の点を設定
+        ctx.beginPath(); 
+        ctx.moveTo(clientX, clientY);
         
         // 座標を更新
         [lastX, lastY] = [clientX, clientY];
     }
+    
+    // ★ 修正2: 描画移動 (mousemove/touchmove)
+    function draw(e) {
+        if (!isDrawing) return;
+
+        e.preventDefault(); 
+        
+        const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+        const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+
+        // 最後の点から新しい点まで線を引く
+        ctx.lineTo(clientX, clientY);
+        
+        // 座標を更新
+        [lastX, lastY] = [clientX, clientY];
+        
+        // 描画が遅れるのを防ぐため、移動中でも描画を更新
+        ctx.stroke(); 
+    }
+
+    // ★ 修正3: 描画終了 (mouseup/touchend/mouseout)
+    function stopDrawing() {
+        if (!isDrawing) return;
+        
+        // パスを終了
+        ctx.closePath(); 
+        isDrawing = false;
+    }
 
     // イベントリスナーの設定
-    // passive: false でpreventDefaultを有効化
     ['mousedown', 'touchstart'].forEach(eventName => {
-        canvas.addEventListener(eventName, (e) => {
-            isDrawing = true;
-            e.preventDefault(); 
-            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-            [lastX, lastY] = [clientX, clientY];
-            draw(e); 
-        }, { passive: false });
+        canvas.addEventListener(eventName, startDrawing, { passive: false });
     });
 
     ['mousemove', 'touchmove'].forEach(eventName => {
-        canvas.addEventListener(eventName, draw, { passive: false }); // touchmoveもpassive: false
+        canvas.addEventListener(eventName, draw, { passive: false }); 
     });
 
     ['mouseup', 'touchend', 'mouseout'].forEach(eventName => {
-        canvas.addEventListener(eventName, () => isDrawing = false, false);
+        canvas.addEventListener(eventName, stopDrawing, false);
     });
 
-    // --- ARへの反映ロジック ---
+    // --- ARへの反映ロジック (変更なし) ---
 
     const drawingPlane = document.getElementById('drawingPlane');
     let texture = null; 
 
     function applyDrawing() {
-        // 描画キャンバスの背景を透明にする
         canvas.style.backgroundColor = 'transparent';
 
-        // AR空間のプレーンのサイズを画面の縦横比に合わせる
         const aspectRatio = canvas.height / canvas.width;
         const planeWidth = 2; 
         const planeHeight = planeWidth * aspectRatio;
@@ -154,17 +165,14 @@
             texture.dispose();
         }
 
-        // THREE.jsのCanvasTextureを作成
         texture = new THREE.CanvasTexture(canvas);
         texture.minFilter = THREE.LinearFilter;
         texture.needsUpdate = true;
 
-        // プレーンの材質を取得し、テクスチャを適用
         const material = drawingPlane.getObject3D('mesh').material;
         material.map = texture;
         material.needsUpdate = true;
 
-        // 描画キャンバスとコントロールを非表示
         canvas.style.zIndex = -1;
         document.getElementById('controls').style.display = 'none';
 
@@ -174,14 +182,12 @@
     function resetDrawingMode() {
         ctx.clearRect(0, 0, canvas.width, canvas.height); 
         canvas.style.zIndex = 10; 
-        // 背景色を元の半透明の黒に戻す
         canvas.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
         document.getElementById('controls').style.display = 'flex';
         
         alert('新しい絵を描いてください。AR空間の前の絵はそのまま残っています。');
     }
     
-    // コントロールボタンにロジックを割り当て
     document.getElementById('applyButton').onclick = applyDrawing;
     document.getElementById('resetButton').onclick = resetDrawingMode;
 
