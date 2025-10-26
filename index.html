@@ -73,8 +73,6 @@
 <script>
     document.addEventListener('DOMContentLoaded', (event) => {
         
-        // --- Canvas 描画のロジック ---
-
         const canvas = document.getElementById('drawingCanvas');
         const ctx = canvas.getContext('2d');
         let isDrawing = false;
@@ -96,7 +94,7 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas(); 
 
-        // 描画開始 (mousedown/touchstart) - パスの開始
+        // 描画開始 (mousedown/touchstart) - パスの開始準備のみ
         function startDrawing(e) {
             isDrawing = true;
             e.preventDefault(); 
@@ -111,7 +109,7 @@
             [lastX, lastY] = [clientX, clientY];
         }
         
-        // 描画移動 (mousemove/touchmove) - パスにセグメントを追加
+        // 描画移動 (mousemove/touchmove) - 描画の強制確定
         function draw(e) {
             if (!isDrawing) return;
 
@@ -120,21 +118,23 @@
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
 
-            // 最後の点から新しい点まで線を引く
+            // 1. 最後の点から新しい点まで線を引く
             ctx.lineTo(clientX, clientY);
             
-            // 描画移動中はstroke()を行わない (シンプル化)
+            // 2. 描画を確定 (stroke)
+            ctx.stroke(); 
+            
+            // 3. 次の描画のために新しいパスを開始/移動
+            ctx.beginPath();
+            ctx.moveTo(clientX, clientY);
             
             [lastX, lastY] = [clientX, clientY];
         }
 
-        // 描画終了 (mouseup/touchend/mouseout) - パスを確定
+        // 描画終了 (mouseup/touchend/mouseout)
         function stopDrawing() {
             if (!isDrawing) return;
-            
-            // パス全体を一度に描画し確定
-            ctx.stroke(); 
-            
+            // 終了時のstrokeは不要 (drawで確定済み)
             isDrawing = false;
         }
 
@@ -151,7 +151,7 @@
             canvas.addEventListener(eventName, stopDrawing, false);
         });
 
-        // --- ARへの反映ロジック (変更なし) ---
+        // --- ARへの反映ロジック ---
 
         const drawingPlane = document.getElementById('drawingPlane');
         let texture = null; 
