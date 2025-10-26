@@ -79,7 +79,7 @@
         canvas.height = window.innerHeight;
         
         ctx.strokeStyle = '#FFFFFF'; 
-        ctx.lineWidth = 15; 
+        ctx.lineWidth = 20; // 線幅をさらに太くし、途切れを目立たなくする
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
@@ -89,110 +89,32 @@
     window.addEventListener('resize', resizeCanvas);
     resizeCanvas(); 
 
-    // ★ 修正1: 描画開始 (mousedown/touchstart)
+    // ★ 修正1: 描画開始 (mousedown/touchstart) - 最初の点を打つ
     function startDrawing(e) {
         isDrawing = true;
         e.preventDefault(); 
         
         const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
         const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-
-        // 新しいパスを開始し、最初の点を設定
+        
+        // 最初の点を打つ
         ctx.beginPath(); 
         ctx.moveTo(clientX, clientY);
-        
-        // タップ時にも点が打てるようにストロークを即時実行
+        ctx.lineTo(clientX, clientY); // タップだけで点が打てるようにlineToを追加
         ctx.stroke(); 
         
-        // 座標を更新
+        // 次の移動のためにパスをリセット
+        ctx.beginPath();
+        ctx.moveTo(clientX, clientY);
+
         [lastX, lastY] = [clientX, clientY];
     }
     
-    // ★ 修正2: 描画移動 (mousemove/touchmove)
+    // ★ 修正2: 描画移動 (mousemove/touchmove) - パスを毎イベントで確定/リセット
     function draw(e) {
         if (!isDrawing) return;
 
         e.preventDefault(); 
         
         const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-        const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-
-        // 最後の点から新しい点まで線を引く
-        ctx.lineTo(clientX, clientY);
-        
-        // パスに追加されたセグメントをすぐに描画して線が途切れないようにする
-        ctx.stroke(); 
-        
-        // 座標を更新
-        [lastX, lastY] = [clientX, clientY];
-    }
-
-    // ★ 修正3: 描画終了 (mouseup/touchend/mouseout)
-    function stopDrawing() {
-        if (!isDrawing) return;
-        
-        // パスを閉じずに描画を終了する
-        isDrawing = false;
-    }
-
-    // イベントリスナーの設定
-    ['mousedown', 'touchstart'].forEach(eventName => {
-        canvas.addEventListener(eventName, startDrawing, { passive: false });
-    });
-
-    ['mousemove', 'touchmove'].forEach(eventName => {
-        canvas.addEventListener(eventName, draw, { passive: false }); 
-    });
-
-    ['mouseup', 'touchend', 'mouseout'].forEach(eventName => {
-        canvas.addEventListener(eventName, stopDrawing, false);
-    });
-
-    // --- ARへの反映ロジック (変更なし) ---
-
-    const drawingPlane = document.getElementById('drawingPlane');
-    let texture = null; 
-
-    function applyDrawing() {
-        canvas.style.backgroundColor = 'transparent';
-
-        const aspectRatio = canvas.height / canvas.width;
-        const planeWidth = 2; 
-        const planeHeight = planeWidth * aspectRatio;
-        drawingPlane.setAttribute('width', planeWidth);
-        drawingPlane.setAttribute('height', planeHeight);
-        drawingPlane.setAttribute('position', `0 0 -3`); 
-
-        if (texture) {
-            texture.dispose();
-        }
-
-        texture = new THREE.CanvasTexture(canvas);
-        texture.minFilter = THREE.LinearFilter;
-        texture.needsUpdate = true;
-
-        const material = drawingPlane.getObject3D('mesh').material;
-        material.map = texture;
-        material.needsUpdate = true;
-
-        canvas.style.zIndex = -1;
-        document.getElementById('controls').style.display = 'none';
-
-        alert('AR空間に絵が反映されました！スマホを動かして見てね。');
-    }
-
-    function resetDrawingMode() {
-        ctx.clearRect(0, 0, canvas.width, canvas.height); 
-        canvas.style.zIndex = 10; 
-        canvas.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-        document.getElementById('controls').style.display = 'flex';
-        
-        alert('新しい絵を描いてください。AR空間の前の絵はそのまま残っています。');
-    }
-    
-    document.getElementById('applyButton').onclick = applyDrawing;
-    document.getElementById('resetButton').onclick = resetDrawingMode;
-
-</script>
-</body>
-</html>
+        const clientY
