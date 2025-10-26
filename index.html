@@ -94,7 +94,7 @@
         window.addEventListener('resize', resizeCanvas);
         resizeCanvas(); 
 
-        // 描画開始 (mousedown/touchstart) - パスの開始準備のみ
+        // 描画開始 (mousedown/touchstart) - パスの開始準備
         function startDrawing(e) {
             isDrawing = true;
             e.preventDefault(); 
@@ -109,7 +109,7 @@
             [lastX, lastY] = [clientX, clientY];
         }
         
-        // 描画移動 (mousemove/touchmove) - 描画の強制確定
+        // 描画移動 (mousemove/touchmove) - 描画の強制確定 (線の繋ぎ目を修正)
         function draw(e) {
             if (!isDrawing) return;
 
@@ -118,23 +118,23 @@
             const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
             const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
 
-            // 1. 最後の点から新しい点まで線を引く
+            // 1. 最後の確定点から新しい点まで線を引く
             ctx.lineTo(clientX, clientY);
             
             // 2. 描画を確定 (stroke)
             ctx.stroke(); 
             
-            // 3. 次の描画のために新しいパスを開始/移動
+            // 3. 次の描画のために新しいパスを開始
             ctx.beginPath();
-            ctx.moveTo(clientX, clientY);
             
+            // 4. 座標を更新し、その点を次の描画の始点に設定
             [lastX, lastY] = [clientX, clientY];
+            ctx.moveTo(lastX, lastY); 
         }
 
         // 描画終了 (mouseup/touchend/mouseout)
         function stopDrawing() {
             if (!isDrawing) return;
-            // 終了時のstrokeは不要 (drawで確定済み)
             isDrawing = false;
         }
 
