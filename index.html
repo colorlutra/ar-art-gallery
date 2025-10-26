@@ -10,21 +10,24 @@
 
     <style>
         body { margin: 0; overflow: hidden; }
-        /* A-Frameのキャンバスの上に描画用キャンバスを重ねる */
+        
+        /* 描画用キャンバスを画面全体に固定し、ARの上に重ねる */
         #drawingCanvas {
             position: fixed;
             top: 0;
             left: 0;
-            z-index: 10;
-            touch-action: none; 
-            background-color: rgba(0, 0, 0, 0.5); 
+            z-index: 10; /* ARシーン(z-index: 1)よりも前面 */
+            touch-action: none; /* ドローイング中のブラウザ操作(スクロール/ズーム)を防止 (重要) */
+            background-color: rgba(0, 0, 0, 0.5); /* 描画中の半透明背景 */
         }
+        
+        /* コントロールUIを画面下部に固定 */
         #controls {
             position: fixed;
             bottom: 20px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 20;
+            z-index: 20; /* 最前面 */
             padding: 10px;
             background-color: white;
             border-radius: 5px;
@@ -32,12 +35,14 @@
             display: flex;
             gap: 10px;
         }
+        
         button {
             padding: 10px 15px;
             font-size: 16px;
             cursor: pointer;
             border: 1px solid #ccc;
             background-color: #eee;
+            transition: background-color 0.1s;
         }
         button:active {
             background-color: #ddd;
@@ -56,65 +61,4 @@
 <a-scene
     embedded
     arjs='sourceType: webcam; detectionMode: mono;'
-    vr-mode-ui="enabled: false">
-
-    <a-entity position="0 0 -3">
-        <a-plane id="drawingPlane" width="1" height="1" rotation="0 0 0" color="#FFFFFF" transparent="true" opacity="1"></a-plane>
-    </a-entity>
-
-    <a-camera-static/>
-</a-scene>
-
-<script>
-    // --- Canvas 描画のロジック ---
-
-    const canvas = document.getElementById('drawingCanvas');
-    const ctx = canvas.getContext('2d');
-    let isDrawing = false;
-    let lastX = 0;
-    let lastY = 0;
-    
-    function resizeCanvas() {
-        canvas.width = window.innerWidth;
-        canvas.height = window.innerHeight;
-        
-        ctx.strokeStyle = '#FFFFFF'; 
-        ctx.lineWidth = 20; // 線幅をさらに太くし、途切れを目立たなくする
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        
-        ctx.clearRect(0, 0, canvas.width, canvas.height); 
-    }
-    
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas(); 
-
-    // ★ 修正1: 描画開始 (mousedown/touchstart) - 最初の点を打つ
-    function startDrawing(e) {
-        isDrawing = true;
-        e.preventDefault(); 
-        
-        const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-        const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-        
-        // 最初の点を打つ
-        ctx.beginPath(); 
-        ctx.moveTo(clientX, clientY);
-        ctx.lineTo(clientX, clientY); // タップだけで点が打てるようにlineToを追加
-        ctx.stroke(); 
-        
-        // 次の移動のためにパスをリセット
-        ctx.beginPath();
-        ctx.moveTo(clientX, clientY);
-
-        [lastX, lastY] = [clientX, clientY];
-    }
-    
-    // ★ 修正2: 描画移動 (mousemove/touchmove) - パスを毎イベントで確定/リセット
-    function draw(e) {
-        if (!isDrawing) return;
-
-        e.preventDefault(); 
-        
-        const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-        const clientY
+    vr-mode
