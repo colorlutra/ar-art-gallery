@@ -1,48 +1,202 @@
-// ... (resizeCanvas関数や変数定義はそのまま) ...
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>学祭ARお絵かき</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 
-// 描画開始 (mousedown/touchstart)
-function startDrawing(e) {
-    isDrawing = true;
-    e.preventDefault(); 
-    
-    const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-    const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-    
-    // パスを開始し、最初の点を設定 (線を描き始める準備)
-    ctx.beginPath(); 
-    ctx.moveTo(clientX, clientY);
-    
-    // 座標を更新
-    [lastX, lastY] = [clientX, clientY];
-}
+    <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+    <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
 
-// 描画移動 (mousemove/touchmove)
-function draw(e) {
-    if (!isDrawing) return;
+    <style>
+        body { margin: 0; overflow: hidden; }
+        
+        #drawingCanvas {
+            position: fixed;
+            top: 0;
+            left: 0;
+            z-index: 10;
+            touch-action: none; 
+            background-color: rgba(0, 0, 0, 0.5); 
+        }
+        
+        #controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 20;
+            padding: 10px;
+            background-color: white;
+            border-radius: 5px;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+            display: flex;
+            gap: 10px;
+        }
+        
+        button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            border: 1px solid #ccc;
+            background-color: #eee;
+            transition: background-color 0.1s;
+        }
+        button:active {
+            background-color: #ddd;
+        }
+    </style>
+</head>
+<body>
 
-    e.preventDefault(); 
-    
-    const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-    const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+<canvas id="drawingCanvas"></canvas>
 
-    // 最後の点から新しい点まで線を引く (パスに追加するだけ)
-    ctx.lineTo(clientX, clientY);
-    
-    // ★ 描画移動中はstroke()を実行せず、描画負荷を最小限に抑える
-    // ctx.stroke(); // ← 削除
+<div id="controls">
+    <button id="resetButton">新しく描く (リセット)</button>
+    <button id="applyButton">ARに反映！</button>
+</div>
 
-    // 座標を更新
-    [lastX, lastY] = [clientX, clientY];
-}
+<a-scene
+    embedded
+    arjs='sourceType: webcam; detectionMode: mono;'
+    vr-mode-ui="enabled: false"
+    cursor="rayOrigin: mouse" 
+    raycaster="objects: none; far: 0">
 
-// 描画終了 (mouseup/touchend/mouseout)
-function stopDrawing() {
-    if (!isDrawing) return;
-    
-    // ★ 描画終了時に、パス全体を一度に描画し確定させる (安定性の鍵)
-    ctx.stroke(); 
-    
-    isDrawing = false;
-}
+    <a-entity position="0 0 -3">
+        <a-plane id="drawingPlane" width="1" height="1" rotation="0 0 0" color="#FFFFFF" transparent="true" opacity="1"></a-plane>
+    </a-entity>
 
-// ... (イベントリスナーやAR反映ロジックはそのまま) ...
+    <a-camera-static/>
+</a-scene>
+
+<script>
+    document.addEventListener('DOMContentLoaded', (event) => {
+        
+        // --- Canvas 描画のロジック ---
+
+        const canvas = document.getElementById('drawingCanvas');
+        const ctx = canvas.getContext('2d');
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+        
+        function resizeCanvas() {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
+            
+            ctx.strokeStyle = '#FFFFFF'; 
+            ctx.lineWidth = 20; 
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+        }
+        
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas(); 
+
+        // 描画開始 (mousedown/touchstart) - パスの開始
+        function startDrawing(e) {
+            isDrawing = true;
+            e.preventDefault(); 
+            
+            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+            
+            // パスを開始し、最初の点を設定
+            ctx.beginPath(); 
+            ctx.moveTo(clientX, clientY);
+            
+            [lastX, lastY] = [clientX, clientY];
+        }
+        
+        // 描画移動 (mousemove/touchmove) - パスにセグメントを追加
+        function draw(e) {
+            if (!isDrawing) return;
+
+            e.preventDefault(); 
+            
+            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
+            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+
+            // 最後の点から新しい点まで線を引く
+            ctx.lineTo(clientX, clientY);
+            
+            // 描画移動中はstroke()を行わない (シンプル化)
+            
+            [lastX, lastY] = [clientX, clientY];
+        }
+
+        // 描画終了 (mouseup/touchend/mouseout) - パスを確定
+        function stopDrawing() {
+            if (!isDrawing) return;
+            
+            // パス全体を一度に描画し確定
+            ctx.stroke(); 
+            
+            isDrawing = false;
+        }
+
+        // イベントリスナーの設定
+        ['mousedown', 'touchstart'].forEach(eventName => {
+            canvas.addEventListener(eventName, startDrawing, { passive: false });
+        });
+
+        ['mousemove', 'touchmove'].forEach(eventName => {
+            canvas.addEventListener(eventName, draw, { passive: false }); 
+        });
+
+        ['mouseup', 'touchend', 'mouseout'].forEach(eventName => {
+            canvas.addEventListener(eventName, stopDrawing, false);
+        });
+
+        // --- ARへの反映ロジック (変更なし) ---
+
+        const drawingPlane = document.getElementById('drawingPlane');
+        let texture = null; 
+
+        function applyDrawing() {
+            canvas.style.backgroundColor = 'transparent';
+
+            const aspectRatio = canvas.height / canvas.width;
+            const planeWidth = 2; 
+            const planeHeight = planeWidth * aspectRatio;
+            drawingPlane.setAttribute('width', planeWidth);
+            drawingPlane.setAttribute('height', planeHeight);
+            drawingPlane.setAttribute('position', `0 0 -3`); 
+
+            if (texture) {
+                texture.dispose();
+            }
+
+            texture = new THREE.CanvasTexture(canvas);
+            texture.minFilter = THREE.LinearFilter;
+            texture.needsUpdate = true;
+
+            const material = drawingPlane.getObject3D('mesh').material;
+            material.map = texture;
+            material.needsUpdate = true;
+
+            canvas.style.zIndex = -1;
+            document.getElementById('controls').style.display = 'none';
+
+            alert('AR空間に絵が反映されました！スマホを動かして見てね。');
+        }
+
+        function resetDrawingMode() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height); 
+            
+            canvas.style.zIndex = 10; 
+            canvas.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+            document.getElementById('controls').style.display = 'flex';
+            
+            alert('新しい絵を描いてください。');
+        }
+        
+        document.getElementById('applyButton').onclick = applyDrawing;
+        document.getElementById('resetButton').onclick = resetDrawingMode;
+    });
+</script>
+</body>
+</html>
