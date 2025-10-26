@@ -10,16 +10,14 @@
 
     <style>
         body { margin: 0; overflow: hidden; }
-        
         #drawingCanvas {
             position: fixed;
             top: 0;
             left: 0;
             z-index: 10;
-            touch-action: none; 
-            background-color: rgba(0, 0, 0, 0.5); 
+            touch-action: none;
+            background-color: rgba(0, 0, 0, 0.5);
         }
-        
         #controls {
             position: fixed;
             bottom: 20px;
@@ -33,7 +31,6 @@
             display: flex;
             gap: 10px;
         }
-        
         button {
             padding: 10px 15px;
             font-size: 16px;
@@ -58,9 +55,9 @@
 
 <a-scene
     embedded
-    arjs='sourceType: webcam; detectionMode: mono;'
+    arjs='sourceType: webcam; detectionMode: mono; cameraResolution: low;'
     vr-mode-ui="enabled: false"
-    cursor="rayOrigin: mouse" 
+    cursor="rayOrigin: mouse"
     raycaster="objects: none; far: 0">
 
     <a-entity position="0 0 -3">
@@ -71,132 +68,115 @@
 </a-scene>
 
 <script>
-    document.addEventListener('DOMContentLoaded', (event) => {
-        
-        const canvas = document.getElementById('drawingCanvas');
-        const ctx = canvas.getContext('2d');
-        let isDrawing = false;
-        let lastX = 0;
-        let lastY = 0;
-        
-        function resizeCanvas() {
-            canvas.width = window.innerWidth;
-            canvas.height = window.innerHeight;
-            
-            ctx.strokeStyle = '#FFFFFF'; 
-            ctx.lineWidth = 20; 
-            ctx.lineCap = 'round';
-            ctx.lineJoin = 'round';
-            
-            ctx.clearRect(0, 0, canvas.width, canvas.height); 
-        }
-        
-        window.addEventListener('resize', resizeCanvas);
-        resizeCanvas(); 
+document.addEventListener('DOMContentLoaded', () => {
+    const canvas = document.getElementById('drawingCanvas');
+    const ctx = canvas.getContext('2d');
+    let isDrawing = false;
+    let lastX = 0;
+    let lastY = 0;
 
-        // 描画開始 (mousedown/touchstart) - パスの開始準備
-        function startDrawing(e) {
-            isDrawing = true;
-            e.preventDefault(); 
-            
-            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
-            
-            // パスを開始し、最初の点を設定
-            ctx.beginPath(); 
-            ctx.moveTo(clientX, clientY);
-            
-            [lastX, lastY] = [clientX, clientY];
-        }
-        
-        // 描画移動 (mousemove/touchmove) - 描画の強制確定 (線の繋ぎ目を修正)
-        function draw(e) {
-            if (!isDrawing) return;
+    function resizeCanvas() {
+        canvas.width = window.innerWidth;
+        canvas.height = window.innerHeight;
 
-            e.preventDefault(); 
-            
-            const clientX = (e.touches ? e.touches[0].clientX : e.clientX);
-            const clientY = (e.touches ? e.touches[0].clientY : e.clientY);
+        ctx.strokeStyle = '#FFFFFF';
+        ctx.lineWidth = 30;
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
 
-            // 1. 最後の確定点から新しい点まで線を引く
-            ctx.lineTo(clientX, clientY);
-            
-            // 2. 描画を確定 (stroke)
-            ctx.stroke(); 
-            
-            // 3. 次の描画のために新しいパスを開始
-            ctx.beginPath();
-            
-            // 4. 座標を更新し、その点を次の描画の始点に設定
-            [lastX, lastY] = [clientX, clientY];
-            ctx.moveTo(lastX, lastY); 
-        }
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
 
-        // 描画終了 (mouseup/touchend/mouseout)
-        function stopDrawing() {
-            if (!isDrawing) return;
-            isDrawing = false;
-        }
+    window.addEventListener('resize', resizeCanvas);
+    resizeCanvas();
 
-        // イベントリスナーの設定
-        ['mousedown', 'touchstart'].forEach(eventName => {
-            canvas.addEventListener(eventName, startDrawing, { passive: false });
-        });
+    function getClientCoords(e) {
+        return {
+            x: e.touches ? e.touches[0].clientX : e.clientX,
+            y: e.touches ? e.touches[0].clientY : e.clientY
+        };
+    }
 
-        ['mousemove', 'touchmove'].forEach(eventName => {
-            canvas.addEventListener(eventName, draw, { passive: false }); 
-        });
+    function startDrawing(e) {
+        isDrawing = true;
+        e.preventDefault();
 
-        ['mouseup', 'touchend', 'mouseout'].forEach(eventName => {
-            canvas.addEventListener(eventName, stopDrawing, false);
-        });
+        const { x, y } = getClientCoords(e);
+        ctx.beginPath();
+        ctx.moveTo(x, y);
+        [lastX, lastY] = [x, y];
+    }
 
-        // --- ARへの反映ロジック ---
+    function draw(e) {
+        if (!isDrawing) return;
+        e.preventDefault();
 
-        const drawingPlane = document.getElementById('drawingPlane');
-        let texture = null; 
+        const { x, y } = getClientCoords(e);
+        ctx.lineTo(x, y);
+        ctx.stroke();
+        [lastX, lastY] = [x, y];
+    }
 
-        function applyDrawing() {
-            canvas.style.backgroundColor = 'transparent';
+    function stopDrawing() {
+        if (!isDrawing) return;
+        isDrawing = false;
+        ctx.closePath();
+    }
 
-            const aspectRatio = canvas.height / canvas.width;
-            const planeWidth = 2; 
-            const planeHeight = planeWidth * aspectRatio;
-            drawingPlane.setAttribute('width', planeWidth);
-            drawingPlane.setAttribute('height', planeHeight);
-            drawingPlane.setAttribute('position', `0 0 -3`); 
-
-            if (texture) {
-                texture.dispose();
-            }
-
-            texture = new THREE.CanvasTexture(canvas);
-            texture.minFilter = THREE.LinearFilter;
-            texture.needsUpdate = true;
-
-            const material = drawingPlane.getObject3D('mesh').material;
-            material.map = texture;
-            material.needsUpdate = true;
-
-            canvas.style.zIndex = -1;
-            document.getElementById('controls').style.display = 'none';
-
-            alert('AR空間に絵が反映されました！スマホを動かして見てね。');
-        }
-
-        function resetDrawingMode() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height); 
-            
-            canvas.style.zIndex = 10; 
-            canvas.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
-            document.getElementById('controls').style.display = 'flex';
-            
-            alert('新しい絵を描いてください。');
-        }
-        
-        document.getElementById('applyButton').onclick = applyDrawing;
-        document.getElementById('resetButton').onclick = resetDrawingMode;
+    ['mousedown', 'touchstart'].forEach(eventName => {
+        canvas.addEventListener(eventName, startDrawing, { passive: false });
     });
+
+    ['mousemove', 'touchmove'].forEach(eventName => {
+        canvas.addEventListener(eventName, draw, { passive: false });
+    });
+
+    ['mouseup', 'touchend'].forEach(eventName => {
+        canvas.addEventListener(eventName, stopDrawing, false);
+    });
+
+    const drawingPlane = document.getElementById('drawingPlane');
+    let texture = null;
+
+    function applyDrawing() {
+        canvas.style.backgroundColor = 'transparent';
+
+        const aspectRatio = canvas.height / canvas.width;
+        const planeWidth = 2;
+        const planeHeight = planeWidth * aspectRatio;
+        drawingPlane.setAttribute('width', planeWidth);
+        drawingPlane.setAttribute('height', planeHeight);
+        drawingPlane.setAttribute('position', `0 0 -3`);
+
+        if (texture) {
+            texture.dispose();
+        }
+
+        texture = new THREE.CanvasTexture(canvas);
+        texture.minFilter = THREE.LinearFilter;
+        texture.needsUpdate = true;
+
+        const material = drawingPlane.getObject3D('mesh').material;
+        material.map = texture;
+        material.needsUpdate = true;
+
+        canvas.style.zIndex = -1;
+        document.getElementById('controls').style.display = 'none';
+
+        alert('AR空間に絵が反映されました！スマホを動かして見てね。');
+    }
+
+    function resetDrawingMode() {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        canvas.style.zIndex = 10;
+        canvas.style.backgroundColor = 'rgba(0, 0, 0, 0.5)';
+        document.getElementById('controls').style.display = 'flex';
+        alert('新しい絵を描いてください。');
+    }
+
+    document.getElementById('applyButton').onclick = applyDrawing;
+    document.getElementById('resetButton').onclick = resetDrawingMode;
+});
 </script>
 </body>
 </html>
